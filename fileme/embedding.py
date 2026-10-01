@@ -10,12 +10,21 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import Protocol
 
 from fileme import config
 
 # Il modello è pubblicato anche in altri formati (stessi pesi, file diversi):
 # non ci servono, e saltarli fa risparmiare qualche GB di download.
 FILE_DA_NON_SCARICARE = ["*.bin", "*.h5", "*.msgpack", "*.ot", "onnx/*", "openvino/*"]
+
+
+class Modello(Protocol):
+    """Quello che ci serve da un modello di embedding (vero o, nei test, finto)."""
+
+    def codifica_documenti(self, testi: list[str]) -> list[list[float]]: ...
+
+    def codifica_domanda(self, testo: str) -> list[float]: ...
 
 
 class ModelloMancante(Exception):
@@ -58,7 +67,7 @@ class ModelloEmbedding:
         return self._codifica([config.PREFISSO_DOMANDA + testo])[0]
 
     def _codifica(self, testi: list[str]) -> list[list[float]]:
-        vettori = self._carica().encode(
+        vettori = self.carica().encode(
             testi,
             batch_size=16,
             normalize_embeddings=True,  # vettori di lunghezza 1: confronti più semplici
@@ -67,7 +76,8 @@ class ModelloEmbedding:
         )
         return vettori.tolist()
 
-    def _carica(self):
+    def carica(self):
+        """Carica il modello dal disco (solo la prima volta: poi resta in memoria)."""
         if self._modello is None:
             cartella = cartella_modello(self.nome)
             if not modello_presente(self.nome):

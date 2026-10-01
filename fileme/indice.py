@@ -12,19 +12,14 @@ import hashlib
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterator, Protocol
+from typing import Iterator
 
 import chromadb
 from chromadb.config import Settings
 
 from fileme import config
+from fileme.embedding import Modello
 from fileme.estrazione import estrai_documento, trova_file
-
-
-class Modello(Protocol):
-    """Quello che ci serve da un modello di embedding (vero o, nei test, finto)."""
-
-    def codifica_documenti(self, testi: list[str]) -> list[list[float]]: ...
 
 
 @dataclass
@@ -34,6 +29,16 @@ class InfoFile:
     dimensione: int  # in byte
     modificato: float  # data di ultima modifica
     impronta: str  # "hash" del contenuto: cambia se cambia anche un solo byte
+
+
+@dataclass
+class ChunkTrovato:
+    """Un chunk restituito da una ricerca nell'indice."""
+
+    percorso: Path
+    tipo: str
+    testo: str
+    somiglianza: float  # 1 = identico; più è basso, meno c'entra con la domanda
 
 
 # --- Il database ----------------------------------------------------------------
@@ -95,6 +100,25 @@ class Indice:
 
     def numero_chunk(self) -> int:
         return self._raccolta.count()
+
+    def chunk_simili(self, vettore: list[float], quanti: int) -> list[ChunkTrovato]:
+        """I chunk più vicini al vettore dato, dal più simile al meno simile."""
+        quanti = min(quanti, self.numero_chunk())
+        if quanti == 0:
+            return []
+        risultato = self._raccolta.query(
+            query_embeddings=[vettore],
+            n_results=quanti,
+            include=["documents", "metadatas", "distances"],
+        )
+        return [
+            # Chroma restituisce una "distanza" (0 = identico): la trasformiamo
+            # in somiglianza (1 = identico), più intuitiva.
+            ChunkTrovato(Path(m["percorso"]), m["tipo"], testo, 1 - distanza)
+            for testo, m, distanza in zip(
+                risultato["documents"][0], risultato["metadatas"][0], risultato["distances"][0]
+            )
+        ]
 
 
 def nome_raccolta(modello: str) -> str:

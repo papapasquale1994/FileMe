@@ -24,7 +24,7 @@ Prototipo (MVP) per computer desktop, scritto in Python.
 | 1 | Setup: struttura, dipendenze, documenti di esempio | ✅ fatto |
 | 2 | Estrazione del testo dai file (`fileme estrai`) | ✅ fatto |
 | 3 | Indicizzazione nel database (`fileme indicizza`) | ✅ fatto |
-| 4 | Ricerca (`fileme cerca`) | in arrivo |
+| 4 | Ricerca (`fileme cerca`) | ✅ fatto |
 | 5 | Suggerimento contestuale (`fileme suggerisci`) | in arrivo |
 | 6 | Valutazione con 20 query di prova (`fileme valuta`) | in arrivo |
 
@@ -122,8 +122,10 @@ Deve mostrare la versione, la cartella dati e il modello. Poi lancia i test:
 ```
 pytest
 ```
-Deve finire con `passed` (superati). Un test risulta `skipped` (saltato) finché non scarichi
-il modello: è quello che prova il modello vero. Dopo `fileme scarica-modello` girerà anche lui.
+Deve finire con `passed` (superati). Due test risultano `skipped` (saltati) finché non scarichi
+il modello: sono quelli che provano il modello vero. Dopo `fileme scarica-modello` girano anche
+loro e verificano, tra l'altro, che la ricerca dell'esempio "il curriculum per candidature nel
+turismo" trovi il CV giusto nei primi 3 risultati, in meno di 3 secondi e senza internet.
 
 ---
 
@@ -138,9 +140,12 @@ il modello: è quello che prova il modello vero. Dopo `fileme scarica-modello` g
 | `fileme estrai <cartella> --anteprima 300` | come sopra, con un'anteprima più lunga (300 caratteri) |
 | `fileme scarica-modello` | scarica il modello di embedding (circa 1,1 GB). **Serve internet, una volta sola.** |
 | `fileme indicizza <cartella>` | aggiunge all'indice i file nuovi o modificati della cartella, toglie quelli cancellati |
+| `fileme cerca "descrizione"` | mostra i 5 file più pertinenti, con punteggio, percorso ed estratto |
+| `fileme cerca -n 10 "descrizione"` | come sopra, ma mostra 10 file |
+| `fileme cerca` | ricerca **interattiva**: il modello si carica una volta e puoi fare più ricerche di fila |
 
 Al posto della cartella puoi indicare anche un singolo file.
-I comandi `cerca`, `suggerisci` e `valuta` arriveranno con le prossime fasi.
+I comandi `suggerisci` e `valuta` arriveranno con le prossime fasi.
 
 ### Esempio: `fileme estrai esempi/documenti`
 
@@ -209,6 +214,54 @@ Quanto ci vuole? La prima volta il modello deve calcolare i vettori di tutti i c
 centinaio di documenti servono indicativamente alcuni minuti, a seconda del computer. Le volte
 successive bastano pochi secondi, se i file sono cambiati poco.
 
+## Cercare i documenti
+
+Dopo aver indicizzato, descrivi a parole quello che cerchi:
+```
+fileme cerca "il curriculum per candidature nel turismo"
+```
+
+Il risultato ha questa forma:
+```
+Risultati per: "ricetta del ragù con le tagliatelle"
+
+1. ricetta_nonna.txt  (punteggio …)
+   Percorso: …/esempi/documenti/Desktop/ricetta_nonna.txt
+   «Servire con tagliatelle fresche all'uovo, mai con gli spaghetti!»
+
+2. …
+
+Tempo: … s per la ricerca | … s in totale, compreso l'avvio di FileMe e del modello
+```
+
+- **Punteggio**: va da 0 a 1. Più è alto, più il file è vicino alla tua descrizione. Conta il
+  **confronto tra i risultati** della stessa ricerca, non il valore in sé: con questo modello
+  anche documenti poco pertinenti hanno spesso punteggi alti.
+- **Estratto**: la frase del file più vicina alla tua descrizione, per capire al volo se è
+  il documento giusto.
+- Un file compare **una volta sola**, anche se è lungo e diviso in tanti chunk.
+- Le virgolette non sono obbligatorie: `fileme cerca contratto affitto` funziona lo stesso.
+
+### Quanto è veloce? Il traguardo dei 3 secondi
+
+La riga `Tempo` mostra due numeri:
+- **per la ricerca**: il lavoro vero (domanda → vettore → confronto → estratti). Di solito è
+  una frazione di secondo.
+- **in totale**: comprende anche l'avvio di FileMe e il caricamento del modello in memoria,
+  che richiede alcuni secondi ogni volta che lanci il comando.
+
+Se fai più ricerche di fila, usa la **modalità interattiva**: scrivi solo `fileme cerca`. Il
+modello si carica una volta e ogni ricerca successiva risponde in circa il tempo "per la
+ricerca":
+```
+fileme cerca
+Cosa cerchi? contratto d'affitto
+...
+Cosa cerchi? bolletta del gas
+...
+Cosa cerchi?          (Invio su riga vuota per uscire)
+```
+
 ## Documenti di esempio
 
 In `esempi/documenti/` ci sono 24 documenti **inventati** (CV, bollette, contratto d'affitto,
@@ -238,12 +291,14 @@ FileMe/
 │   ├── estrazione.py       trova i file, ne legge il testo e lo divide in chunk
 │   ├── embedding.py        scarica e usa il modello che trasforma i testi in vettori
 │   ├── indice.py           il database (Chroma) e l'indicizzazione dei soli file cambiati
+│   ├── ricerca.py          dalla descrizione ai file più pertinenti, con l'estratto
 │   └── cli.py              i comandi da terminale (fileme info, fileme estrai, ...)
 ├── tests/                  test automatici (si lanciano con: pytest)
 │   ├── conftest.py         strumenti per i test: un modello "finto" e il blocco della rete
 │   ├── test_cli.py
 │   ├── test_estrazione.py
-│   └── test_indice.py
+│   ├── test_indice.py
+│   └── test_ricerca.py
 └── esempi/
     ├── genera_documenti.py crea i documenti di esempio
     └── documenti/          i 24 documenti inventati

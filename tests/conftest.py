@@ -16,7 +16,13 @@ class ModelloFinto:
     basta per verificare che indicizzazione e ricerca funzionino.
     """
 
-    DIMENSIONI = 256
+    DIMENSIONI = 1024
+    # Parole troppo comuni per dire qualcosa sul contenuto: le ignoriamo.
+    PAROLE_VUOTE = set(
+        "il lo la i gli le un una di del dello della dei degli delle a al alla ai "
+        "da dal dalla in nel nella con su per tra fra e o che è non ci si mi ti "
+        "the a an of to and or in on for with is are file cartella passage query".split()
+    )
 
     def __init__(self):
         self.testi_codificati: list[str] = []  # per controllare cosa è stato ricalcolato
@@ -28,9 +34,14 @@ class ModelloFinto:
     def codifica_domanda(self, testo: str) -> list[float]:
         return self._vettore(testo)
 
+    def carica(self) -> None:
+        pass  # niente da caricare
+
     def _vettore(self, testo: str) -> list[float]:
         vettore = [0.0] * self.DIMENSIONI
         for parola in re.findall(r"\w+", testo.lower()):
+            if parola in self.PAROLE_VUOTE:
+                continue
             vettore[int(hashlib.md5(parola.encode()).hexdigest(), 16) % self.DIMENSIONI] += 1
         norma = math.sqrt(sum(x * x for x in vettore)) or 1.0
         return [x / norma for x in vettore]

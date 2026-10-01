@@ -2,7 +2,7 @@
 
 Dopo l'installazione si usano così:  fileme <comando> [opzioni]
 I comandi arrivano una fase alla volta: per ora `info`, `estrai`,
-`scarica-modello` e `indicizza`.
+`scarica-modello`, `indicizza` e `cerca`.
 """
 
 import argparse
@@ -11,16 +11,21 @@ import sys
 import time
 from pathlib import Path
 
-from fileme import __version__, config
-from fileme.embedding import (
+# Momento di avvio, preso PRIMA di caricare le librerie pesanti: serve a
+# misurare il tempo totale di `fileme cerca`, come lo percepisci tu.
+INIZIO = time.perf_counter()
+
+from fileme import __version__, config  # noqa: E402
+from fileme.embedding import (  # noqa: E402
     ModelloEmbedding,
     ModelloMancante,
     cartella_modello,
     modello_presente,
     scarica_modello,
 )
-from fileme.estrazione import estrai_cartella
-from fileme.indice import Indice, indicizza
+from fileme.estrazione import estrai_cartella  # noqa: E402
+from fileme.indice import Indice, indicizza  # noqa: E402
+from fileme.ricerca import cerca  # noqa: E402
 
 
 def comando_info(args: argparse.Namespace) -> None:
@@ -83,6 +88,61 @@ def comando_indicizza(args: argparse.Namespace) -> None:
         + f" | tempo: {secondi:.1f} s"
     )
     print(f"Chunk nell'indice: {indice.numero_chunk()} (salvato in {config.CARTELLA_INDICE})")
+
+
+def comando_cerca(args: argparse.Namespace) -> None:
+    """Cerca i file più pertinenti per una descrizione a parole."""
+    if args.numero < 1:
+        sys.exit("Errore: il numero di file da mostrare (-n) deve essere almeno 1.")
+    indice = Indice(config.CARTELLA_INDICE)
+    if indice.numero_chunk() == 0:
+        sys.exit("L'indice è vuoto: prima esegui  fileme indicizza <cartella>")
+    modello = ModelloEmbedding()
+    try:
+        modello.carica()
+    except ModelloMancante as errore:
+        sys.exit(str(errore))
+
+    domanda = " ".join(args.domanda).strip()
+    if domanda:
+        secondi = _mostra_ricerca(domanda, indice, modello, args.numero)
+        totale = time.perf_counter() - INIZIO
+        print(
+            f"Tempo: {secondi:.2f} s per la ricerca | "
+            f"{totale:.1f} s in totale, compreso l'avvio di FileMe e del modello"
+        )
+        return
+
+    # Nessuna domanda scritta: modalità interattiva. Il modello si carica una
+    # volta sola e resta in memoria, quindi ogni ricerca successiva è veloce.
+    print("Ricerca interattiva: scrivi cosa cerchi e premi Invio.")
+    print("Per uscire premi Invio su una riga vuota (oppure Ctrl+C).")
+    while True:
+        try:
+            domanda = input("\nCosa cerchi? ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            break
+        if not domanda:
+            break
+        secondi = _mostra_ricerca(domanda, indice, modello, args.numero)
+        print(f"Tempo: {secondi:.2f} s")
+
+
+def _mostra_ricerca(domanda: str, indice: Indice, modello, numero: int) -> float:
+    """Esegue una ricerca, stampa i risultati e restituisce quanti secondi ha impiegato."""
+    inizio = time.perf_counter()
+    risultati = cerca(domanda, indice, modello, numero)
+    secondi = time.perf_counter() - inizio
+
+    print(f'\nRisultati per: "{domanda}"\n')
+    for posizione, risultato in enumerate(risultati, start=1):
+        print(f"{posizione}. {risultato.percorso.name}  (punteggio {risultato.punteggio:.2f})")
+        print(f"   Percorso: {risultato.percorso}")
+        if not risultato.percorso.exists():
+            print("   ATTENZIONE: il file non è più qui (rilancia fileme indicizza)")
+        print(f"   «{_accorcia(risultato.estratto, 220)}»\n")
+    return secondi
 
 
 def comando_estrai(args: argparse.Namespace) -> None:
@@ -164,6 +224,20 @@ def crea_parser() -> argparse.ArgumentParser:
     )
     indicizzazione.add_argument("cartella", help="cartella (o singolo file) da indicizzare")
     indicizzazione.set_defaults(funzione=comando_indicizza)
+
+    ricerca = sottocomandi.add_parser(
+        "cerca",
+        help="trova i file che corrispondono a una descrizione (senza descrizione: modalità interattiva)",
+    )
+    ricerca.add_argument(
+        "domanda", nargs="*",
+        help='cosa cerchi, meglio tra virgolette: es. "il contratto d\'affitto"',
+    )
+    ricerca.add_argument(
+        "-n", "--numero", type=int, default=5, metavar="N",
+        help="quanti file mostrare (default: 5)",
+    )
+    ricerca.set_defaults(funzione=comando_cerca)
 
     return parser
 
