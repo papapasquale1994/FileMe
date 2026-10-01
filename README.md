@@ -209,6 +209,7 @@ FileMe/
 | Libreria | A cosa serve |
 |---|---|
 | `pypdf` | leggere il testo dei PDF |
+| `cryptography` | aprire i PDF "protetti" che si aprono senza password (es. estratti conto); arriva con `pypdf[crypto]` |
 | `python-docx` | leggere i documenti Word (.docx) |
 | `openpyxl` | leggere i fogli Excel (.xlsx) |
 | `chromadb` | database vettoriale salvato su disco (fase 3) |

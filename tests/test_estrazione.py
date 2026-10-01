@@ -9,6 +9,7 @@ import pytest
 from docx import Document
 from fpdf import FPDF
 from openpyxl import Workbook
+from pypdf import PdfWriter
 
 from fileme.cli import main
 from fileme.estrazione import (
@@ -76,6 +77,28 @@ def test_pdf(tmp_path):
     assert doc.tipo == "pdf"
     assert "Bolletta della luce" in doc.chunk[0]
     assert "63,87 euro" in doc.chunk[0]
+
+
+def cifra_pdf(origine: Path, destinazione: Path, password_apertura: str) -> Path:
+    scrittore = PdfWriter(clone_from=str(origine))
+    scrittore.encrypt(user_password=password_apertura, owner_password="proprietario", algorithm="AES-256")
+    scrittore.write(str(destinazione))
+    return destinazione
+
+
+def test_pdf_protetto_senza_password_si_legge(tmp_path):
+    # Come molti estratti conto: cifrato, ma si apre senza chiedere password
+    originale = crea_pdf(tmp_path / "originale.pdf", ["Estratto conto bancario"])
+    doc = estrai_documento(cifra_pdf(originale, tmp_path / "protetto.pdf", password_apertura=""))
+    assert doc.errore is None
+    assert "Estratto conto bancario" in doc.chunk[0]
+
+
+def test_pdf_con_password_da_errore_chiaro(tmp_path):
+    originale = crea_pdf(tmp_path / "originale.pdf", ["Segreto"])
+    doc = estrai_documento(cifra_pdf(originale, tmp_path / "segreto.pdf", password_apertura="1234"))
+    assert doc.chunk == []
+    assert "password" in doc.errore
 
 
 def test_pdf_senza_testo_non_e_un_errore(tmp_path):
