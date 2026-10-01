@@ -1,0 +1,17 @@
+# Ambiente virtuale Python (si ricrea con: python -m venv .venv)
+.venv/
+venv/
+
+# File temporanei creati da Python e dai test
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+build/
+dist/
+
+# Dati di FileMe (indice e modello): non vanno MAI su GitHub
+.fileme/
+
+# Cartella dove puoi mettere documenti tuoi per prove locali: esclusa da git
+documenti_privati/
