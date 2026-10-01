@@ -29,3 +29,14 @@ MODELLO_EMBEDDING = "intfloat/multilingual-e5-base"
 
 # --- Formati di file che sappiamo leggere -------------------------------------
 ESTENSIONI_SUPPORTATE = {".pdf", ".docx", ".xlsx", ".txt"}
+
+# --- Divisione del testo in chunk ---------------------------------------------
+# Ogni chunk ha al massimo PAROLE_PER_CHUNK parole. Le ultime
+# PAROLE_SOVRAPPOSIZIONE parole di un chunk vengono ripetute all'inizio del
+# successivo, così una frase tagliata a metà non va persa.
+PAROLE_PER_CHUNK = 250
+PAROLE_SOVRAPPOSIZIONE = 50
+
+# Dai fogli Excel leggiamo al massimo queste righe per foglio: per capire di
+# cosa parla un file bastano le prime, e i fogli enormi rallenterebbero tutto.
+MAX_RIGHE_PER_FOGLIO = 500

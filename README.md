@@ -19,7 +19,7 @@ Prototipo (MVP) per computer desktop, scritto in Python.
 | Fase | Cosa | Stato |
 |---|---|---|
 | 1 | Setup: struttura, dipendenze, documenti di esempio | ✅ fatto |
-| 2 | Estrazione del testo dai file (`fileme estrai`) | in arrivo |
+| 2 | Estrazione del testo dai file (`fileme estrai`) | ✅ fatto |
 | 3 | Indicizzazione nel database (`fileme indicizza`) | in arrivo |
 | 4 | Ricerca (`fileme cerca`) | in arrivo |
 | 5 | Suggerimento contestuale (`fileme suggerisci`) | in arrivo |
@@ -129,8 +129,44 @@ Deve finire con `passed` (superati).
 |---|---|
 | `fileme` | mostra l'elenco dei comandi |
 | `fileme info` | mostra la configurazione (cartella dati, modello, formati) |
+| `fileme estrai <cartella>` | legge i file della cartella (e delle sottocartelle) e mostra per ognuno il tipo, in quanti chunk è diviso e un'anteprima del testo. **Non salva nulla.** |
+| `fileme estrai <cartella> --completo` | come sopra, ma mostra il testo completo di ogni chunk |
+| `fileme estrai <cartella> --anteprima 300` | come sopra, con un'anteprima più lunga (300 caratteri) |
 
-I comandi `estrai`, `indicizza`, `cerca`, `suggerisci` e `valuta` arriveranno con le prossime fasi.
+Al posto della cartella puoi indicare anche un singolo file.
+I comandi `indicizza`, `cerca`, `suggerisci` e `valuta` arriveranno con le prossime fasi.
+
+### Esempio: `fileme estrai esempi/documenti`
+
+```
+[PDF ] Desktop/Allegato1.pdf  ->  2 chunk
+       «CONTRATTO DI LOCAZIONE AD USO ABITATIVO (ai sensi dell'art. 2, comma 1, ...»
+[XLSX] Documenti/casa/budget_famiglia_2024.xlsx  ->  1 chunk
+       «Foglio: Spese mensili Categoria | Gennaio | Febbraio | Marzo | ...»
+...
+Riepilogo: file letti: 24 | chunk: 27 | senza testo: 0 | errori: 0 | tempo: 0.2 s
+```
+
+Cosa possono voler dire i messaggi:
+- **`ATTENZIONE: nessun testo`**: il file non contiene testo leggibile. Di solito è un PDF
+  scansionato, cioè una "foto" del foglio: per leggerlo servirebbe l'OCR, che per ora non
+  facciamo.
+- **`ERRORE, file non letto`**: il file è danneggiato, protetto da password o non è davvero
+  del formato indicato. Gli altri file vengono letti comunque.
+
+### Provarlo sui tuoi documenti
+
+`fileme estrai` è il primo comando che puoi provare in sicurezza su una tua cartella vera:
+legge soltanto, non salva nulla e non usa internet. Esempi:
+
+| | Comando |
+|---|---|
+| Windows | `fileme estrai "C:\Users\Mario\Downloads"` |
+| macOS | `fileme estrai ~/Downloads` |
+| Linux | `fileme estrai ~/Scaricati` |
+
+Le virgolette servono se il percorso contiene spazi. Il riepilogo finale ti dice quanti file
+si leggono bene, quanti sono scansioni e quanti danno errore.
 
 ## Documenti di esempio
 
@@ -158,9 +194,11 @@ FileMe/
 ├── fileme/                 il codice del programma
 │   ├── __init__.py         segna la cartella come pacchetto Python; contiene la versione
 │   ├── config.py           impostazioni: cartella dati, modello, formati, privacy
-│   └── cli.py              i comandi da terminale (fileme info, ...)
+│   ├── estrazione.py       trova i file, ne legge il testo e lo divide in chunk
+│   └── cli.py              i comandi da terminale (fileme info, fileme estrai, ...)
 ├── tests/                  test automatici (si lanciano con: pytest)
-│   └── test_cli.py
+│   ├── test_cli.py
+│   └── test_estrazione.py
 └── esempi/
     ├── genera_documenti.py crea i documenti di esempio
     └── documenti/          i 24 documenti inventati
