@@ -26,6 +26,10 @@ CARTELLA_MODELLI = CARTELLA_DATI / "modelli"
 # --- Modello di embedding -----------------------------------------------------
 # Modello multilingue (italiano + inglese) che trasforma un testo in numeri.
 MODELLO_EMBEDDING = "intfloat/multilingual-e5-base"
+# I modelli "e5" vogliono un'etichetta davanti al testo: "query: " per le
+# domande di ricerca e "passage: " per i pezzi di documento.
+PREFISSO_DOMANDA = "query: "
+PREFISSO_DOCUMENTO = "passage: "
 
 # --- Formati di file che sappiamo leggere -------------------------------------
 ESTENSIONI_SUPPORTATE = {".pdf", ".docx", ".xlsx", ".txt"}

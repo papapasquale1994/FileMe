@@ -1,7 +1,8 @@
 """Comandi da terminale di FileMe.
 
 Dopo l'installazione si usano così:  fileme <comando> [opzioni]
-I comandi arrivano una fase alla volta: per ora `info` ed `estrai`.
+I comandi arrivano una fase alla volta: per ora `info`, `estrai`,
+`scarica-modello` e `indicizza`.
 """
 
 import argparse
@@ -11,7 +12,15 @@ import time
 from pathlib import Path
 
 from fileme import __version__, config
+from fileme.embedding import (
+    ModelloEmbedding,
+    ModelloMancante,
+    cartella_modello,
+    modello_presente,
+    scarica_modello,
+)
 from fileme.estrazione import estrai_cartella
+from fileme.indice import Indice, indicizza
 
 
 def comando_info(args: argparse.Namespace) -> None:
@@ -19,7 +28,61 @@ def comando_info(args: argparse.Namespace) -> None:
     print(f"FileMe {__version__} (Python {platform.python_version()})")
     print(f"Cartella dati:   {config.CARTELLA_DATI}")
     print(f"Modello:         {config.MODELLO_EMBEDDING}")
+    print(f"Modello scaricato: {'sì' if modello_presente() else 'no (usa: fileme scarica-modello)'}")
     print(f"Formati letti:   {', '.join(sorted(config.ESTENSIONI_SUPPORTATE))}")
+
+
+def comando_scarica_modello(args: argparse.Namespace) -> None:
+    """Scarica il modello di embedding: serve internet, una volta sola."""
+    cartella = cartella_modello()
+    if modello_presente():
+        print(f"Il modello è già presente in {cartella}: non serve scaricarlo di nuovo.")
+        return
+    print(f"Scarico {config.MODELLO_EMBEDDING} (circa 1,1 GB) in {cartella} ...")
+    try:
+        scarica_modello()
+    except Exception as errore:  # rete assente, sito irraggiungibile, disco pieno...
+        sys.exit(
+            "\nDownload non riuscito. Controlla la connessione a internet e lo spazio su disco,\n"
+            "poi riprova: il download riprende da dove si era fermato.\n"
+            f"(dettaglio tecnico: {type(errore).__name__}: {errore})"
+        )
+    dimensione = sum(f.stat().st_size for f in cartella.rglob("*") if f.is_file())
+    print(f"\nFatto ({dimensione / 1e9:.1f} GB). Da ora FileMe funziona senza internet.")
+
+
+def comando_indicizza(args: argparse.Namespace) -> None:
+    """Aggiunge all'indice i file nuovi o modificati di una cartella."""
+    percorso = Path(args.cartella).expanduser()
+    if not percorso.exists():
+        sys.exit(f"Errore: '{percorso}' non esiste.")
+    base = percorso.resolve() if percorso.is_dir() else percorso.resolve().parent
+
+    print(f"Indicizzo {percorso.resolve()}")
+    print("(il primo file nuovo richiede qualche secondo in più: si carica il modello)\n")
+    inizio = time.perf_counter()
+    conteggi = dict.fromkeys(["nuovo", "modificato", "invariato", "rimosso", "senza testo", "errore"], 0)
+    indice = Indice(config.CARTELLA_INDICE)
+    try:
+        for esito in indicizza(percorso, indice, ModelloEmbedding()):
+            conteggi[esito.stato] += 1
+            if esito.stato == "invariato":
+                continue  # non li elenchiamo uno per uno: sarebbero troppi
+            nome = esito.percorso.relative_to(base)
+            dettaglio = f" ({esito.n_chunk} chunk)" if esito.n_chunk else ""
+            if esito.errore:
+                dettaglio = f" ({esito.errore})"
+            print(f"[{esito.stato}]".ljust(14) + f"{nome}{dettaglio}")
+    except ModelloMancante as errore:
+        sys.exit(f"\n{errore}")
+
+    secondi = time.perf_counter() - inizio
+    print(
+        "\nRiepilogo: "
+        + " | ".join(f"{stato}: {numero}" for stato, numero in conteggi.items())
+        + f" | tempo: {secondi:.1f} s"
+    )
+    print(f"Chunk nell'indice: {indice.numero_chunk()} (salvato in {config.CARTELLA_INDICE})")
 
 
 def comando_estrai(args: argparse.Namespace) -> None:
@@ -88,6 +151,19 @@ def crea_parser() -> argparse.ArgumentParser:
         help="mostra il testo completo di ogni chunk invece dell'anteprima",
     )
     estrai.set_defaults(funzione=comando_estrai)
+
+    scarica = sottocomandi.add_parser(
+        "scarica-modello",
+        help="scarica il modello di embedding (serve internet, una volta sola)",
+    )
+    scarica.set_defaults(funzione=comando_scarica_modello)
+
+    indicizzazione = sottocomandi.add_parser(
+        "indicizza",
+        help="aggiunge all'indice i file nuovi o modificati di una cartella",
+    )
+    indicizzazione.add_argument("cartella", help="cartella (o singolo file) da indicizzare")
+    indicizzazione.set_defaults(funzione=comando_indicizza)
 
     return parser
 
