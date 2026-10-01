@@ -26,7 +26,7 @@ Prototipo (MVP) per computer desktop, scritto in Python.
 | 3 | Indicizzazione nel database (`fileme indicizza`) | ✅ fatto |
 | 4 | Ricerca (`fileme cerca`) | ✅ fatto |
 | 5 | Suggerimento contestuale (`fileme suggerisci`) | ✅ fatto |
-| 6 | Valutazione con 20 query di prova (`fileme valuta`) | in arrivo |
+| 6 | Valutazione con 20 query di prova (`fileme valuta`) | ✅ fatto |
 
 ---
 
@@ -122,10 +122,10 @@ Deve mostrare la versione, la cartella dati e il modello. Poi lancia i test:
 ```
 pytest
 ```
-Deve finire con `passed` (superati). Tre test risultano `skipped` (saltati) finché non scarichi
-il modello: sono quelli che provano il modello vero. Dopo `fileme scarica-modello` girano anche
-loro e verificano, tra l'altro, che la ricerca dell'esempio "il curriculum per candidature nel
-turismo" trovi il CV giusto nei primi 3 risultati, in meno di 3 secondi e senza internet.
+Deve finire con `passed` (superati). Quattro test risultano `skipped` (saltati) finché non
+scarichi il modello: sono quelli che provano il modello vero. Dopo `fileme scarica-modello`
+girano anche loro e verificano, tra l'altro, che sui documenti di esempio il file giusto sia
+nei primi 3 risultati in almeno 14 query su 20, in meno di 3 secondi e senza internet.
 
 ---
 
@@ -145,9 +145,10 @@ turismo" trovi il CV giusto nei primi 3 risultati, in meno di 3 secondi e senza 
 | `fileme cerca` | ricerca **interattiva**: il modello si carica una volta e puoi fare più ricerche di fila |
 | `fileme suggerisci "situazione"` | dalla descrizione di una situazione ai documenti che servono |
 | `fileme suggerisci` | mostra le situazioni conosciute, con parole chiave e documenti |
+| `fileme valuta <file.csv>` | misura quante volte la ricerca trova il file giusto nei primi 3 (usa l'indice principale) |
+| `fileme valuta <file.csv> --cartella <cartella>` | come sopra, ma su un indice temporaneo con solo quella cartella |
 
 Al posto della cartella puoi indicare anche un singolo file.
-Il comando `valuta` arriverà con la prossima fase.
 
 ### Esempio: `fileme estrai esempi/documenti`
 
@@ -307,6 +308,78 @@ visite mediche, viaggio, affitto e casa, trasloco, bollette e consumi, auto e in
 o prestito. **Puoi aggiungerne o modificarle** nel file `fileme/situazioni.py`: in cima al file
 c'è la spiegazione. Dopo una modifica lancia `pytest`, che controlla che l'elenco sia valido.
 
+## Valutazione: FileMe funziona abbastanza bene?
+
+Il criterio dell'MVP: su **20 query di prova**, il file giusto deve essere **nei primi 3
+risultati almeno 14 volte**.
+
+### Sui documenti di esempio
+```
+fileme valuta valutazione/query_esempi.csv --cartella esempi/documenti
+```
+Le 20 query sono in `valutazione/query_esempi.csv` e usano apposta **parole diverse** da quelle
+dei documenti, come farebbe chi non ricorda il testo esatto: "sugo di carne" per il ragù,
+"metano" per il gas, domande in italiano su documenti in inglese. Con `--cartella`, FileMe
+crea un indice **temporaneo** con solo quei documenti: l'indice principale non viene toccato.
+
+Il risultato ha questa forma:
+```
+[OK]  1°  ricetta del sugo di carne della nonna
+[NO]  --  come pulire il filtro della lavatrice
+           atteso: WM-7400_manual_EN.pdf
+           primi 3: …
+...
+Documenti che non esistono (servono a tarare la soglia INCERTO):
+  il mio passaporto  ->  primo risultato: … (punteggio …)
+======================================================================
+Risultato: … su 20 nei primi 3 (…%) | … al primo posto
+Traguardo MVP (almeno 14 su 20 nei primi 3): RAGGIUNTO / NON raggiunto
+Tempo per ricerca: media … s, massimo … s (traguardo: meno di 3 s): OK
+Avvio del modello: … s
+Soglia INCERTO: file giusti da … a …, documenti inesistenti fino a … (attuale: 0.80)
+  -> soglia consigliata: …
+```
+
+### Sui tuoi documenti (il vero banco di prova)
+1. Copia `valutazione/modello_query_personali.csv` in `documenti_privati/query_personali.csv`.
+   La cartella `documenti_privati/` è esclusa da git, quindi le tue query restano private.
+2. Scrivi 20 query su documenti che hai davvero, **senza guardarli prima**, e il nome del file
+   giusto. Puoi usare anche Excel o LibreOffice: le colonne sono separate da `;`.
+3. Indicizza le tue cartelle e lancia:
+   ```
+   fileme valuta documenti_privati/query_personali.csv
+   ```
+Se scrivi male il nome di un file atteso, FileMe te lo segnala ("non è nell'indice").
+
+## Lista di controllo dei criteri dell'MVP
+
+| Criterio | Come verificarlo |
+|---|---|
+| Indicizza almeno 100 documenti reali senza errori bloccanti | `fileme indicizza <cartella>` sulle tue cartelle: guarda il riepilogo. I file con errore vengono saltati senza fermare gli altri. |
+| File giusto nei primi 3 in almeno 14 query su 20 | `fileme valuta documenti_privati/query_personali.csv` → riga "Traguardo MVP" |
+| Una ricerca in meno di 3 secondi | `fileme valuta …` → riga "Tempo per ricerca"; `fileme cerca "…"` → riga "Tempo" |
+| Nessuna rete dopo il download del modello | `pytest`: i test bloccano la rete e falliscono se FileMe prova a collegarsi. Prova anche a staccare il Wi-Fi e usare FileMe. |
+
+## Idee per il futuro: da ricerca a organizzatore
+
+Una volta validata la ricerca, l'indice che FileMe costruisce "capisce" di cosa parla ogni
+file, e questo è la base per un **assistente che aiuta a organizzare** gli spazi di
+archiviazione. Alcune idee, dalla più semplice:
+- **file doppi**: l'impronta (hash) di ogni file è già nell'indice, quindi i doppioni esatti si
+  trovano subito;
+- **nomi poco chiari**: proporre un nome leggibile per file come `documento(3).pdf` (es.
+  "Bolletta gas gen-feb 2024.pdf");
+- **cartelle per argomento**: raggruppare i file simili (bollette, lavoro, salute...) e
+  proporre una struttura di cartelle;
+- **pulizia**: segnalare file vecchi, enormi o mai aperti.
+
+Regola di sicurezza da mantenere: oggi FileMe **legge soltanto**. Un organizzatore dovrebbe
+procedere per gradi:
+1. solo **proposte**: un elenco di cosa farebbe, senza toccare nulla;
+2. modifiche **solo dopo conferma**, file per file o a gruppi;
+3. un **registro per annullare** ogni operazione;
+4. **mai cancellare**: al massimo spostare in una cartella "da rivedere".
+
 ## Documenti di esempio
 
 In `esempi/documenti/` ci sono 24 documenti **inventati** (CV, bollette, contratto d'affitto,
@@ -339,6 +412,7 @@ FileMe/
 │   ├── ricerca.py          dalla descrizione ai file più pertinenti, con l'estratto
 │   ├── situazioni.py       le situazioni conosciute da "suggerisci" (modificabile)
 │   ├── suggerimento.py     dalla situazione ai documenti che servono
+│   ├── valutazione.py      misura quante volte la ricerca trova il file giusto
 │   └── cli.py              i comandi da terminale (fileme info, fileme estrai, ...)
 ├── tests/                  test automatici (si lanciano con: pytest)
 │   ├── conftest.py         strumenti per i test: un modello "finto" e il blocco della rete
@@ -346,7 +420,11 @@ FileMe/
 │   ├── test_estrazione.py
 │   ├── test_indice.py
 │   ├── test_ricerca.py
-│   └── test_suggerimento.py
+│   ├── test_suggerimento.py
+│   └── test_valutazione.py
+├── valutazione/
+│   ├── query_esempi.csv    20 query di prova (+4 documenti inesistenti) sugli esempi
+│   └── modello_query_personali.csv  modello da compilare per i tuoi documenti
 └── esempi/
     ├── genera_documenti.py crea i documenti di esempio
     └── documenti/          i 24 documenti inventati

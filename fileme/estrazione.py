@@ -133,7 +133,11 @@ def _testo_cella(valore: object) -> str:
 
 
 def _leggi_txt(file: BinaryIO) -> str:
-    dati = file.read()
+    return decodifica_testo(file.read())
+
+
+def decodifica_testo(dati: bytes) -> str:
+    """Da byte a testo, indovinando la codifica con cui il file è stato salvato."""
     # I file di testo possono essere salvati con "codifiche" diverse.
     # Proviamo le più comuni: UTF-16 (riconoscibile dal suo marcatore iniziale),
     # UTF-8 (lo standard) e cp1252 (il vecchio standard di Windows).

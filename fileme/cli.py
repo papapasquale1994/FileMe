@@ -2,12 +2,13 @@
 
 Dopo l'installazione si usano così:  fileme <comando> [opzioni]
 I comandi arrivano una fase alla volta: per ora `info`, `estrai`,
-`scarica-modello`, `indicizza`, `cerca` e `suggerisci`.
+`scarica-modello`, `indicizza`, `cerca`, `suggerisci` e `valuta`.
 """
 
 import argparse
 import platform
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -28,6 +29,7 @@ from fileme.indice import Indice, indicizza  # noqa: E402
 from fileme.ricerca import Risultato, cerca  # noqa: E402
 from fileme.situazioni import SITUAZIONI  # noqa: E402
 from fileme.suggerimento import suggerisci  # noqa: E402
+from fileme import valutazione  # noqa: E402
 
 
 def comando_info(args: argparse.Namespace) -> None:
@@ -204,6 +206,101 @@ def _mostra_situazioni() -> None:
     print('\nEsempio:  fileme suggerisci "un\'azienda mi chiede il curriculum"')
 
 
+def comando_valuta(args: argparse.Namespace) -> None:
+    """Misura quante volte la ricerca trova il file giusto nei primi 3 risultati."""
+    file_query = Path(args.file_query).expanduser()
+    if not file_query.exists():
+        sys.exit(f"Errore: il file di query '{file_query}' non esiste.")
+    try:
+        queries = valutazione.leggi_query(file_query)
+    except ValueError as errore:
+        sys.exit(f"Errore nel file {file_query}: {errore}")
+
+    modello = ModelloEmbedding()
+    inizio = time.perf_counter()
+    try:
+        modello.carica()
+    except ModelloMancante as errore:
+        sys.exit(str(errore))
+    avvio = time.perf_counter() - inizio
+
+    # Con --cartella usiamo un indice temporaneo con SOLO quella cartella:
+    # l'indice principale non viene toccato e non "inquina" il risultato.
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as temporanea:
+        if args.cartella:
+            cartella = Path(args.cartella).expanduser()
+            if not cartella.exists():
+                sys.exit(f"Errore: '{cartella}' non esiste.")
+            print(f"Indicizzo {cartella.resolve()} in un indice temporaneo...")
+            indice = Indice(Path(temporanea))
+            n_file = sum(1 for _ in indicizza(cartella, indice, modello))
+            print(f"  {n_file} file, {indice.numero_chunk()} chunk\n")
+        else:
+            indice = Indice(config.CARTELLA_INDICE)
+            if indice.numero_chunk() == 0:
+                sys.exit("L'indice è vuoto: prima esegui  fileme indicizza <cartella>")
+
+        mancanti = valutazione.attesi_non_indicizzati(queries, indice)
+        esiti = valutazione.valuta(queries, indice, modello)
+    _stampa_valutazione(file_query, esiti, mancanti, avvio)
+
+
+def _stampa_valutazione(file_query: Path, esiti, mancanti, avvio: float) -> None:
+    riepilogo = valutazione.riepiloga(esiti)
+    primi = valutazione.PRIMI
+    print(f"Valutazione: {file_query}\n")
+
+    for esito in (e for e in esiti if e.query.attesi):
+        segno = "OK" if esito.nei_primi else "NO"
+        posizione = f"{esito.posizione}°" if esito.posizione else "--"
+        print(f"[{segno}] {posizione:>3}  {esito.query.domanda}")
+        if not esito.nei_primi:
+            trovati = ", ".join(r.percorso.name for r in esito.risultati[:primi]) or "nessuno"
+            print(f"           atteso: {' | '.join(esito.query.attesi)}")
+            print(f"           primi {primi}: {trovati}")
+
+    inesistenti = [e for e in esiti if not e.query.attesi]
+    if inesistenti:
+        print("\nDocumenti che non esistono (servono a tarare la soglia INCERTO):")
+        for esito in inesistenti:
+            primo = esito.risultati[0] if esito.risultati else None
+            dettaglio = f"{primo.percorso.name} (punteggio {primo.punteggio:.2f})" if primo else "nessun risultato"
+            print(f"  {esito.query.domanda}  ->  primo risultato: {dettaglio}")
+
+    if mancanti:
+        print("\nATTENZIONE: questi file attesi non sono nell'indice (nome scritto male?):")
+        for query, atteso in mancanti:
+            print(f"  riga {query.riga}: {atteso}")
+
+    n = riepilogo.query_valutate
+    print("\n" + "=" * 70)
+    if n:
+        raggiunto = "RAGGIUNTO" if riepilogo.nei_primi >= riepilogo.obiettivo else "NON raggiunto"
+        print(
+            f"Risultato: {riepilogo.nei_primi} su {n} nei primi {primi} "
+            f"({riepilogo.nei_primi / n:.0%}) | {riepilogo.al_primo_posto} al primo posto"
+        )
+        print(f"Traguardo MVP (almeno {riepilogo.obiettivo} su {n} nei primi {primi}): {raggiunto}")
+    veloce = "OK" if riepilogo.tempo_massimo < 3 else "TROPPO LENTO"
+    print(
+        f"Tempo per ricerca: media {riepilogo.tempo_medio:.2f} s, "
+        f"massimo {riepilogo.tempo_massimo:.2f} s (traguardo: meno di 3 s): {veloce}"
+    )
+    print(f"Avvio del modello: {avvio:.1f} s (una volta per comando; in `fileme cerca` interattivo non si ripete)")
+
+    if riepilogo.punteggi_giusti and riepilogo.punteggi_inesistenti:
+        print(
+            f"Soglia INCERTO: file giusti da {min(riepilogo.punteggi_giusti):.2f} "
+            f"a {max(riepilogo.punteggi_giusti):.2f}, documenti inesistenti "
+            f"fino a {max(riepilogo.punteggi_inesistenti):.2f} (attuale: {config.SOGLIA_SUGGERIMENTO:.2f})"
+        )
+        soglia = valutazione.soglia_consigliata(riepilogo)
+        if soglia is None:
+            print("  -> i due gruppi si sovrappongono: nessuna soglia li separa del tutto.")
+        else:
+            print(f"  -> soglia consigliata: {soglia:.2f} (si cambia in fileme/config.py)")
+
+
 def comando_estrai(args: argparse.Namespace) -> None:
     """Legge i file di una cartella e mostra cosa ne ricava, senza salvare nulla."""
     percorso = Path(args.cartella).expanduser()
@@ -307,6 +404,17 @@ def crea_parser() -> argparse.ArgumentParser:
         help='la situazione, es. "un\'azienda mi chiede il curriculum"',
     )
     suggerimento.set_defaults(funzione=comando_suggerisci)
+
+    valuta = sottocomandi.add_parser(
+        "valuta",
+        help="misura quante volte la ricerca trova il file giusto (file di query di prova)",
+    )
+    valuta.add_argument("file_query", help="file .csv con le query, es. valutazione/query_esempi.csv")
+    valuta.add_argument(
+        "--cartella", metavar="CARTELLA",
+        help="valuta su un indice temporaneo con solo questa cartella (es. esempi/documenti)",
+    )
+    valuta.set_defaults(funzione=comando_valuta)
 
     return parser
 
