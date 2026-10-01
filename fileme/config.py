@@ -41,6 +41,15 @@ ESTENSIONI_SUPPORTATE = {".pdf", ".docx", ".xlsx", ".txt"}
 PAROLE_PER_CHUNK = 250
 PAROLE_SOVRAPPOSIZIONE = 50
 
+# --- Suggerimento contestuale (fileme suggerisci) ------------------------------
+# Quanto conta la tua frase rispetto alla descrizione del documento cercato:
+# 0.3 = 70% "che tipo di documento è" + 30% "il contesto che hai descritto".
+PESO_CONTESTO = 0.3
+# Sotto questo punteggio un file proposto viene segnalato come INCERTO (forse
+# non hai quel documento). È una stima iniziale per il modello e5: la
+# verificheremo con la valutazione (fase 6).
+SOGLIA_SUGGERIMENTO = 0.80
+
 # Dai fogli Excel leggiamo al massimo queste righe per foglio: per capire di
 # cosa parla un file bastano le prime, e i fogli enormi rallenterebbero tutto.
 MAX_RIGHE_PER_FOGLIO = 500

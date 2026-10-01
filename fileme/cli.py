@@ -2,7 +2,7 @@
 
 Dopo l'installazione si usano così:  fileme <comando> [opzioni]
 I comandi arrivano una fase alla volta: per ora `info`, `estrai`,
-`scarica-modello`, `indicizza` e `cerca`.
+`scarica-modello`, `indicizza`, `cerca` e `suggerisci`.
 """
 
 import argparse
@@ -25,7 +25,9 @@ from fileme.embedding import (  # noqa: E402
 )
 from fileme.estrazione import estrai_cartella  # noqa: E402
 from fileme.indice import Indice, indicizza  # noqa: E402
-from fileme.ricerca import cerca  # noqa: E402
+from fileme.ricerca import Risultato, cerca  # noqa: E402
+from fileme.situazioni import SITUAZIONI  # noqa: E402
+from fileme.suggerimento import suggerisci  # noqa: E402
 
 
 def comando_info(args: argparse.Namespace) -> None:
@@ -94,14 +96,7 @@ def comando_cerca(args: argparse.Namespace) -> None:
     """Cerca i file più pertinenti per una descrizione a parole."""
     if args.numero < 1:
         sys.exit("Errore: il numero di file da mostrare (-n) deve essere almeno 1.")
-    indice = Indice(config.CARTELLA_INDICE)
-    if indice.numero_chunk() == 0:
-        sys.exit("L'indice è vuoto: prima esegui  fileme indicizza <cartella>")
-    modello = ModelloEmbedding()
-    try:
-        modello.carica()
-    except ModelloMancante as errore:
-        sys.exit(str(errore))
+    indice, modello = _prepara_ricerca()
 
     domanda = " ".join(args.domanda).strip()
     if domanda:
@@ -129,6 +124,19 @@ def comando_cerca(args: argparse.Namespace) -> None:
         print(f"Tempo: {secondi:.2f} s")
 
 
+def _prepara_ricerca() -> tuple[Indice, ModelloEmbedding]:
+    """Apre l'indice e carica il modello, oppure spiega cosa manca."""
+    indice = Indice(config.CARTELLA_INDICE)
+    if indice.numero_chunk() == 0:
+        sys.exit("L'indice è vuoto: prima esegui  fileme indicizza <cartella>")
+    modello = ModelloEmbedding()
+    try:
+        modello.carica()
+    except ModelloMancante as errore:
+        sys.exit(str(errore))
+    return indice, modello
+
+
 def _mostra_ricerca(domanda: str, indice: Indice, modello, numero: int) -> float:
     """Esegue una ricerca, stampa i risultati e restituisce quanti secondi ha impiegato."""
     inizio = time.perf_counter()
@@ -138,11 +146,62 @@ def _mostra_ricerca(domanda: str, indice: Indice, modello, numero: int) -> float
     print(f'\nRisultati per: "{domanda}"\n')
     for posizione, risultato in enumerate(risultati, start=1):
         print(f"{posizione}. {risultato.percorso.name}  (punteggio {risultato.punteggio:.2f})")
-        print(f"   Percorso: {risultato.percorso}")
-        if not risultato.percorso.exists():
-            print("   ATTENZIONE: il file non è più qui (rilancia fileme indicizza)")
-        print(f"   «{_accorcia(risultato.estratto, 220)}»\n")
+        _stampa_dettagli(risultato, rientro="   ")
     return secondi
+
+
+def _stampa_dettagli(risultato: Risultato, rientro: str) -> None:
+    """Percorso ed estratto di un risultato (con avviso se il file è sparito)."""
+    print(f"{rientro}Percorso: {risultato.percorso}")
+    if not risultato.percorso.exists():
+        print(f"{rientro}ATTENZIONE: il file non è più qui (rilancia fileme indicizza)")
+    print(f"{rientro}«{_accorcia(risultato.estratto, 220)}»\n")
+
+
+def comando_suggerisci(args: argparse.Namespace) -> None:
+    """Dalla descrizione di una situazione ai documenti che servono."""
+    contesto = " ".join(args.contesto).strip()
+    if not contesto:
+        _mostra_situazioni()
+        return
+    indice, modello = _prepara_ricerca()
+
+    inizio = time.perf_counter()
+    suggerimento = suggerisci(contesto, indice, modello)
+    secondi = time.perf_counter() - inizio
+
+    print(f'\nContesto: "{contesto}"')
+    if suggerimento.situazione is None:
+        print("Nessuna situazione dell'elenco riconosciuta: cerco direttamente la frase.")
+        print("(Per vedere le situazioni conosciute scrivi solo: fileme suggerisci)\n")
+        for posizione, risultato in enumerate(suggerimento.risultati_diretti, start=1):
+            print(f"{posizione}. {risultato.percorso.name}  (punteggio {risultato.punteggio:.2f})")
+            _stampa_dettagli(risultato, rientro="   ")
+    else:
+        parole = ", ".join(f"«{p}»" for p in suggerimento.parole_riconosciute)
+        print(f"Situazione riconosciuta: {suggerimento.situazione.nome} (dalle parole {parole})\n")
+        for documento, risultato in suggerimento.documenti:
+            print(documento)
+            if risultato is None:
+                print("   -> nessun file disponibile nell'indice\n")
+                continue
+            incerto = ""
+            if risultato.punteggio < config.SOGLIA_SUGGERIMENTO:
+                incerto = "  INCERTO: forse non hai questo documento"
+            print(f"   -> {risultato.percorso.name}  (punteggio {risultato.punteggio:.2f}){incerto}")
+            _stampa_dettagli(risultato, rientro="      ")
+
+    totale = time.perf_counter() - INIZIO
+    print(f"Tempo: {secondi:.2f} s per il suggerimento | {totale:.1f} s in totale, compreso l'avvio")
+
+
+def _mostra_situazioni() -> None:
+    print("Situazioni conosciute (le trovi e le puoi modificare in fileme/situazioni.py):\n")
+    for situazione in SITUAZIONI:
+        print(f"- {situazione.nome}")
+        print(f"    parole chiave: {', '.join(situazione.parole_chiave)}")
+        print(f"    documenti:     {', '.join(situazione.documenti)}")
+    print('\nEsempio:  fileme suggerisci "un\'azienda mi chiede il curriculum"')
 
 
 def comando_estrai(args: argparse.Namespace) -> None:
@@ -238,6 +297,16 @@ def crea_parser() -> argparse.ArgumentParser:
         help="quanti file mostrare (default: 5)",
     )
     ricerca.set_defaults(funzione=comando_cerca)
+
+    suggerimento = sottocomandi.add_parser(
+        "suggerisci",
+        help="dalla descrizione di una situazione ai documenti che servono (senza frase: elenco situazioni)",
+    )
+    suggerimento.add_argument(
+        "contesto", nargs="*",
+        help='la situazione, es. "un\'azienda mi chiede il curriculum"',
+    )
+    suggerimento.set_defaults(funzione=comando_suggerisci)
 
     return parser
 

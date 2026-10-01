@@ -25,7 +25,7 @@ Prototipo (MVP) per computer desktop, scritto in Python.
 | 2 | Estrazione del testo dai file (`fileme estrai`) | ✅ fatto |
 | 3 | Indicizzazione nel database (`fileme indicizza`) | ✅ fatto |
 | 4 | Ricerca (`fileme cerca`) | ✅ fatto |
-| 5 | Suggerimento contestuale (`fileme suggerisci`) | in arrivo |
+| 5 | Suggerimento contestuale (`fileme suggerisci`) | ✅ fatto |
 | 6 | Valutazione con 20 query di prova (`fileme valuta`) | in arrivo |
 
 ---
@@ -122,7 +122,7 @@ Deve mostrare la versione, la cartella dati e il modello. Poi lancia i test:
 ```
 pytest
 ```
-Deve finire con `passed` (superati). Due test risultano `skipped` (saltati) finché non scarichi
+Deve finire con `passed` (superati). Tre test risultano `skipped` (saltati) finché non scarichi
 il modello: sono quelli che provano il modello vero. Dopo `fileme scarica-modello` girano anche
 loro e verificano, tra l'altro, che la ricerca dell'esempio "il curriculum per candidature nel
 turismo" trovi il CV giusto nei primi 3 risultati, in meno di 3 secondi e senza internet.
@@ -143,9 +143,11 @@ turismo" trovi il CV giusto nei primi 3 risultati, in meno di 3 secondi e senza 
 | `fileme cerca "descrizione"` | mostra i 5 file più pertinenti, con punteggio, percorso ed estratto |
 | `fileme cerca -n 10 "descrizione"` | come sopra, ma mostra 10 file |
 | `fileme cerca` | ricerca **interattiva**: il modello si carica una volta e puoi fare più ricerche di fila |
+| `fileme suggerisci "situazione"` | dalla descrizione di una situazione ai documenti che servono |
+| `fileme suggerisci` | mostra le situazioni conosciute, con parole chiave e documenti |
 
 Al posto della cartella puoi indicare anche un singolo file.
-I comandi `suggerisci` e `valuta` arriveranno con le prossime fasi.
+Il comando `valuta` arriverà con la prossima fase.
 
 ### Esempio: `fileme estrai esempi/documenti`
 
@@ -262,6 +264,49 @@ Cosa cerchi? bolletta del gas
 Cosa cerchi?          (Invio su riga vuota per uscire)
 ```
 
+## Suggerimento contestuale
+
+Con `cerca` descrivi **il documento** ("il mio curriculum"). Con `suggerisci` descrivi invece
+**una situazione**, e FileMe propone i documenti che servono, anche quelli che non hai nominato:
+```
+fileme suggerisci "un'azienda mi chiede il curriculum"
+```
+```
+Contesto: "un'azienda mi chiede il curriculum"
+Situazione riconosciuta: candidatura di lavoro (dalle parole «curriculum»)
+
+Curriculum vitae
+   -> CV_2024_def.pdf  (punteggio …)
+      Percorso: …
+      «…»
+
+Lettera di presentazione
+   -> lettera_presentazione_hotel.docx  (punteggio …)
+...
+Referenze
+   -> …
+Attestati e certificati
+   -> …
+```
+
+Come funziona:
+1. **Riconosce la situazione** dalle parole chiave (es. "curriculum", "colloquio" →
+   candidatura di lavoro). Se più situazioni corrispondono, vince quella con più parole trovate.
+2. Per **ogni documento che serve** in quella situazione cerca il file più adatto. Mescola la
+   descrizione del documento (70%) con la tua frase (30%): così, se hai due CV, viene proposto
+   quello più vicino al contesto. Il peso si cambia in `fileme/config.py` (`PESO_CONTESTO`).
+3. Ogni documento riceve **un file diverso**.
+4. Se un file ha un punteggio basso viene segnalato con **`INCERTO: forse non hai questo
+   documento`**: probabilmente quel documento non c'è tra i tuoi file, e FileMe ti mostra il
+   più vicino che ha trovato. La soglia (`SOGLIA_SUGGERIMENTO` in `fileme/config.py`) è una
+   stima iniziale da verificare con la valutazione.
+5. Se **nessuna situazione** corrisponde, FileMe cerca direttamente la tua frase, come `cerca`.
+
+Le situazioni conosciute sono 9: candidatura di lavoro, dichiarazione dei redditi, salute e
+visite mediche, viaggio, affitto e casa, trasloco, bollette e consumi, auto e incidenti, mutuo
+o prestito. **Puoi aggiungerne o modificarle** nel file `fileme/situazioni.py`: in cima al file
+c'è la spiegazione. Dopo una modifica lancia `pytest`, che controlla che l'elenco sia valido.
+
 ## Documenti di esempio
 
 In `esempi/documenti/` ci sono 24 documenti **inventati** (CV, bollette, contratto d'affitto,
@@ -292,13 +337,16 @@ FileMe/
 │   ├── embedding.py        scarica e usa il modello che trasforma i testi in vettori
 │   ├── indice.py           il database (Chroma) e l'indicizzazione dei soli file cambiati
 │   ├── ricerca.py          dalla descrizione ai file più pertinenti, con l'estratto
+│   ├── situazioni.py       le situazioni conosciute da "suggerisci" (modificabile)
+│   ├── suggerimento.py     dalla situazione ai documenti che servono
 │   └── cli.py              i comandi da terminale (fileme info, fileme estrai, ...)
 ├── tests/                  test automatici (si lanciano con: pytest)
 │   ├── conftest.py         strumenti per i test: un modello "finto" e il blocco della rete
 │   ├── test_cli.py
 │   ├── test_estrazione.py
 │   ├── test_indice.py
-│   └── test_ricerca.py
+│   ├── test_ricerca.py
+│   └── test_suggerimento.py
 └── esempi/
     ├── genera_documenti.py crea i documenti di esempio
     └── documenti/          i 24 documenti inventati

@@ -31,7 +31,16 @@ class Risultato:
 def cerca(domanda: str, indice: Indice, modello: Modello, numero: int = 5) -> list[Risultato]:
     """I `numero` file più pertinenti per la domanda, dal migliore al peggiore."""
     vettore = modello.codifica_domanda(domanda)
+    primi = file_piu_simili(vettore, indice, numero)
+    estratti = frasi_piu_vicine([vettore] * len(primi), [c.testo for c in primi], modello)
+    return [
+        Risultato(c.percorso, c.tipo, c.somiglianza, estratto)
+        for c, estratto in zip(primi, estratti)
+    ]
 
+
+def file_piu_simili(vettore: list[float], indice: Indice, numero: int) -> list[ChunkTrovato]:
+    """Il chunk migliore di ciascuno dei `numero` file più vicini al vettore."""
     # Chiediamo più chunk dei file che ci servono: un file lungo può
     # occupare da solo molte delle prime posizioni.
     chunk = indice.chunk_simili(vettore, quanti=max(50, numero * 10))
@@ -39,17 +48,11 @@ def cerca(domanda: str, indice: Indice, modello: Modello, numero: int = 5) -> li
     migliori: dict[Path, ChunkTrovato] = {}
     for trovato in chunk:  # sono già in ordine, dal più simile
         migliori.setdefault(trovato.percorso, trovato)  # teniamo solo il primo di ogni file
-    primi = list(migliori.values())[:numero]
-
-    estratti = frasi_piu_vicine(vettore, [c.testo for c in primi], modello)
-    return [
-        Risultato(c.percorso, c.tipo, c.somiglianza, estratto)
-        for c, estratto in zip(primi, estratti)
-    ]
+    return list(migliori.values())[:numero]
 
 
-def frasi_piu_vicine(vettore_domanda: list[float], testi: list[str], modello: Modello) -> list[str]:
-    """Per ogni testo, la frase più vicina alla domanda.
+def frasi_piu_vicine(vettori_domanda: list[list[float]], testi: list[str], modello: Modello) -> list[str]:
+    """Per ogni testo, la frase più vicina al vettore della domanda corrispondente.
 
     Tutte le frasi passano dal modello in un colpo solo: è molto più veloce
     che un testo alla volta.
@@ -61,8 +64,8 @@ def frasi_piu_vicine(vettore_domanda: list[float], testi: list[str], modello: Mo
     vettori = iter(modello.codifica_documenti(tutte))
 
     scelte = []
-    for frasi in frasi_per_testo:
-        punteggi = [_somiglianza(vettore_domanda, next(vettori)) for _ in frasi]
+    for vettore_domanda, frasi in zip(vettori_domanda, frasi_per_testo):
+        punteggi = [somiglianza(vettore_domanda, next(vettori)) for _ in frasi]
         scelte.append(frasi[punteggi.index(max(punteggi))] if frasi else "")
     return scelte
 
@@ -89,6 +92,6 @@ def dividi_in_frasi(testo: str, min_parole: int = 8, max_parole: int = 30) -> li
     return frasi
 
 
-def _somiglianza(a: list[float], b: list[float]) -> float:
+def somiglianza(a: list[float], b: list[float]) -> float:
     # I vettori hanno lunghezza 1, quindi il prodotto scalare è la somiglianza.
     return sum(x * y for x, y in zip(a, b))
