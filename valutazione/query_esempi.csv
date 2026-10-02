@@ -1,0 +1,39 @@
+# Query di valutazione per i documenti di esempio (esempi/documenti).
+# Uso:  fileme valuta valutazione/query_esempi.csv --cartella esempi/documenti
+#
+# Formato: una riga per query, colonne separate da punto e virgola (;).
+#   domanda      -> cosa scriveresti in "fileme cerca"
+#   file_attesi  -> il nome del file giusto. Se più file vanno bene, separali con |
+#                   Scrivi NESSUNO se il documento non esiste: serve a tarare la soglia "INCERTO".
+#   note         -> facoltativo, per ricordarti cosa mette alla prova la query
+# Le righe che iniziano con # sono commenti e vengono ignorate.
+#
+# Le domande usano apposta parole DIVERSE da quelle dei documenti, come farebbe chi
+# non ricorda il testo esatto.
+domanda;file_attesi;note
+il curriculum per candidature nel turismo;CV_2024_def.pdf|Resume_Giulia_Ferri_EN.pdf;esempio del brief - trappola: la tesi parla molto di turismo
+CV in inglese per lavorare all'estero;Resume_Giulia_Ferri_EN.pdf;
+il vecchio curriculum da impiegata amministrativa;curriculum_vecchio.docx;due CV simili: serve il contenuto
+lettera di motivazione per lavorare in albergo;lettera_presentazione_hotel.docx;motivazione/presentazione, albergo/hotel
+lettera di raccomandazione del mio ex direttore;reference_letter.docx;documento in inglese
+quanto ho pagato di corrente elettrica a marzo;fattura_luce_marzo_2024.pdf;corrente elettrica/luce
+la fattura del metano per il riscaldamento;documento(3).pdf;nome del file inutile - metano/gas
+il contratto d'affitto dell'appartamento;Allegato1.pdf;nome del file inutile - affitto/locazione
+risultati degli esami del sangue con il colesterolo alto;stampa_20240312.pdf;nome del file inutile
+prenotazione del volo per Tokyo;e-ticket_7F3KQ.pdf;documento in inglese
+come pulire il filtro della lavatrice;WM-7400_manual_EN.pdf;documento in inglese
+cose da fare prima di cambiare casa;note.txt;trasloco senza dire trasloco - file in codifica Windows
+ricetta del sugo di carne della nonna;ricetta_nonna.txt;ragù/sugo di carne
+attestato del corso sull'igiene degli alimenti;attestato_haccp.pdf;HACCP/igiene degli alimenti
+stipendio netto di gennaio;busta_paga_gennaio_2024.pdf;stipendio/cedolino
+orari dei turni alla reception in estate;turni_reception_luglio.xlsx;foglio Excel - estate/luglio
+quanto pago di spese condominiali;spese_condominio_2024.xlsx;foglio Excel
+quanto spendiamo ogni mese in famiglia;budget_famiglia_2024.xlsx;foglio Excel
+assicurazione della macchina;polizza_rc_auto_2024.pdf;macchina/auto
+documenti per il commercialista e le detrazioni;promemoria_730_2024.docx;commercialista/CAF
+# Documenti che NON esistono tra gli esempi: non contano nel punteggio,
+# servono a vedere quanto è alto il punteggio di un risultato sbagliato.
+il mio passaporto;NESSUNO;
+il certificato di matrimonio;NESSUNO;
+la pagella delle scuole medie;NESSUNO;
+il libretto delle vaccinazioni del cane;NESSUNO;
