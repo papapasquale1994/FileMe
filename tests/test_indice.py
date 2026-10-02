@@ -198,7 +198,8 @@ def test_comando_indicizza(tmp_path, documenti, monkeypatch, capsys):
 
     main(["indicizza", str(documenti)])
     uscita = capsys.readouterr().out
-    assert "[nuovo]       casa/contratto.txt (1 chunk)" in uscita
+    # Path(...) scrive il percorso come il sistema in uso: casa\contratto.txt su Windows
+    assert f"[nuovo]       {Path('casa', 'contratto.txt')} (1 chunk)" in uscita
     assert "nuovo: 3 | modificato: 0 | invariato: 0" in uscita
     assert "Chunk nell'indice: 3" in uscita
 
