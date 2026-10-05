@@ -1,0 +1,19 @@
+# Modello per valutare FileMe sui TUOI documenti.
+#
+# 1. Copia questo file nella cartella documenti_privati/ del progetto (è esclusa da git,
+#    quindi le tue query non finiranno mai su GitHub), ad esempio come:
+#        documenti_privati/query_personali.csv
+# 2. Pensa a 20 documenti che hai davvero e scrivi per ognuno come lo cercheresti,
+#    SENZA guardarlo prima: con le parole che ti vengono in mente.
+# 3. Nella seconda colonna scrivi il nome del file giusto (solo il nome, es. CV_2024.pdf).
+#    Se hai più file con lo stesso nome in cartelle diverse, aggiungi la cartella: lavoro/CV.pdf
+#    Se più file vanno bene, separali con |   Se il documento non esiste, scrivi NESSUNO.
+# 4. Indicizza le tue cartelle (fileme indicizza ...) e lancia:
+#        fileme valuta documenti_privati/query_personali.csv
+#
+# Puoi aprire e modificare questo file anche con Excel o LibreOffice: le colonne sono
+# separate da punto e virgola (;). Le righe che iniziano con # sono commenti.
+# Le due righe d'esempio qui sotto sono commentate: sostituiscile con le tue.
+domanda;file_attesi;note
+# il curriculum per candidature nel turismo;CV_turismo_2024.pdf;
+# la bolletta della luce di gennaio;bolletta_gennaio.pdf|fattura_enel_01.pdf;

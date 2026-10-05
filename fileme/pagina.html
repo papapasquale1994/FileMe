@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FileMe</title>
+<style>
+  :root {
+    --sfondo: #f6f7f9; --carta: #ffffff; --testo: #1c1f24; --tenue: #5b6470;
+    --bordo: #dde1e6; --accento: #2f6fde; --su-accento: #ffffff; --accento-tenue: #e8f0fd;
+    --avviso: #8a5200; --avviso-tenue: #fff3dc; --errore: #b3261e;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --sfondo: #14161a; --carta: #1d2025; --testo: #e8eaed; --tenue: #9aa3ad;
+      --bordo: #2e333a; --accento: #7aa7ff; --su-accento: #0b1530; --accento-tenue: #1f2b40;
+      --avviso: #f0b35a; --avviso-tenue: #33270f; --errore: #ff8a80;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--sfondo); color: var(--testo); line-height: 1.45;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 760px; margin: 0 auto; padding: 32px 16px 64px; }
+  h1 { margin: 0; font-size: 28px; }
+  .sottotitolo { margin: 4px 0 0; color: var(--tenue); }
+  .stato { margin: 6px 0 24px; font-size: 14px; color: var(--tenue); }
+  .schede { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+  .scheda {
+    border: 1px solid var(--bordo); background: var(--carta); color: var(--testo);
+    padding: 8px 14px; border-radius: 999px; cursor: pointer; font-size: 15px;
+  }
+  .scheda[aria-selected="true"] { background: var(--accento); border-color: var(--accento); color: var(--su-accento); }
+  form { display: flex; gap: 8px; }
+  input[type="search"] {
+    flex: 1; min-width: 0; font-size: 17px; padding: 12px 14px; border-radius: 10px;
+    border: 1px solid var(--bordo); background: var(--carta); color: var(--testo);
+  }
+  input[type="search"]:focus { outline: 2px solid var(--accento); outline-offset: 1px; }
+  .primario {
+    font-size: 16px; padding: 0 20px; border: 0; border-radius: 10px;
+    background: var(--accento); color: var(--su-accento); cursor: pointer;
+  }
+  .esempi { margin: 10px 0 24px; font-size: 14px; color: var(--tenue); display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .esempio {
+    border: 1px dashed var(--bordo); background: none; color: var(--tenue);
+    border-radius: 999px; padding: 3px 10px; cursor: pointer; font-size: 14px;
+  }
+  .info { color: var(--tenue); font-size: 14px; margin: 0 0 12px; }
+  .errore { color: var(--errore); }
+  .risultato {
+    background: var(--carta); border: 1px solid var(--bordo); border-radius: 12px;
+    padding: 14px 16px; margin-bottom: 10px;
+  }
+  .riga-titolo { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+  .nome { font-weight: 600; font-size: 16px; overflow-wrap: anywhere; }
+  .punteggio { font-size: 13px; color: var(--tenue); white-space: nowrap; }
+  .percorso { font-size: 13px; color: var(--tenue); overflow-wrap: anywhere; margin-top: 2px; }
+  .estratto { margin: 8px 0 10px; font-size: 15px; }
+  .azioni button {
+    font-size: 14px; padding: 6px 12px; border: 1px solid var(--bordo); background: none;
+    color: var(--testo); border-radius: 8px; cursor: pointer; margin: 0 6px 0 0;
+  }
+  .avviso { display: inline-block; font-size: 12px; padding: 2px 8px; border-radius: 999px; background: var(--avviso-tenue); color: var(--avviso); }
+  .situazione { background: var(--accento-tenue); border-radius: 10px; padding: 10px 14px; margin-bottom: 4px; }
+  h2 { font-size: 15px; margin: 18px 0 8px; color: var(--tenue); font-weight: 600; }
+  .nascosto { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  footer { margin-top: 40px; font-size: 13px; color: var(--tenue); }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>FileMe</h1>
+    <p class="sottotitolo">Ritrova i tuoi documenti descrivendoli a parole.</p>
+    <p class="stato" id="stato">&nbsp;</p>
+  </header>
+
+  <div class="schede" role="tablist" aria-label="Modalità">
+    <button class="scheda" role="tab" aria-selected="true" data-modo="cerca">Cerca un documento</button>
+    <button class="scheda" role="tab" aria-selected="false" data-modo="suggerisci">Cosa mi serve per…</button>
+  </div>
+
+  <form id="modulo">
+    <label for="domanda" class="nascosto" id="etichetta">Cosa cerchi?</label>
+    <input type="search" id="domanda" autocomplete="off" autofocus>
+    <button class="primario" type="submit">Cerca</button>
+  </form>
+  <div class="esempi" id="esempi"></div>
+
+  <section id="risultati" aria-live="polite"></section>
+
+  <footer>
+    Tutto resta sul tuo computer: questa pagina non usa internet.
+    Per spegnere FileMe premi Ctrl+C nella finestra del terminale.
+  </footer>
+</main>
+
+<script>
+  "use strict";
+
+  const MODI = {
+    cerca: {
+      etichetta: "Cosa cerchi?",
+      segnaposto: "es. il contratto d'affitto dell'appartamento",
+      esempi: ["il curriculum per candidature nel turismo", "la bolletta del gas", "come pulire il filtro della lavatrice"],
+    },
+    suggerisci: {
+      etichetta: "Descrivi la situazione",
+      segnaposto: "es. un'azienda mi chiede il curriculum",
+      esempi: ["un'azienda mi chiede il curriculum", "devo fare il 730", "vado in vacanza in Giappone"],
+    },
+  };
+  let modo = "cerca";
+
+  const $ = (id) => document.getElementById(id);
+  const numero = (x) => x.toLocaleString("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  // Crea un elemento. Il testo dei documenti entra SOLO come testo (textContent):
+  // non può mai diventare codice della pagina.
+  function el(tag, classe, testo) {
+    const e = document.createElement(tag);
+    if (classe) e.className = classe;
+    if (testo !== undefined) e.textContent = testo;
+    return e;
+  }
+
+  function impostaModo(nuovo) {
+    modo = nuovo;
+    for (const b of document.querySelectorAll(".scheda")) {
+      b.setAttribute("aria-selected", String(b.dataset.modo === modo));
+    }
+    $("etichetta").textContent = MODI[modo].etichetta;
+    $("domanda").placeholder = MODI[modo].segnaposto;
+    const esempi = $("esempi");
+    esempi.replaceChildren(el("span", "", "Prova:"));
+    for (const testo of MODI[modo].esempi) {
+      const b = el("button", "esempio", testo);
+      b.type = "button";
+      b.addEventListener("click", () => { $("domanda").value = testo; avvia(); });
+      esempi.append(b);
+    }
+    $("risultati").replaceChildren();
+    $("domanda").focus();
+  }
+
+  async function chiedi(url, opzioni) {
+    const risposta = await fetch(url, opzioni);
+    const dati = await risposta.json();
+    if (!risposta.ok) throw new Error(dati.errore || "Qualcosa non ha funzionato.");
+    return dati;
+  }
+
+  async function apri(percorso, cartella) {
+    try {
+      await chiedi("/api/apri", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-FileMe": "1" },
+        body: JSON.stringify({ percorso, cartella }),
+      });
+    } catch (e) {
+      alert(e.message);
+    }
+  }
+
+  function schedaRisultato(r, avviso) {
+    const s = el("article", "risultato");
+    const titolo = el("div", "riga-titolo");
+    titolo.append(el("span", "nome", r.nome), el("span", "punteggio", "pertinenza " + numero(r.punteggio)));
+    s.append(titolo, el("div", "percorso", r.cartella));
+    if (avviso) s.append(el("span", "avviso", avviso));
+    if (!r.esiste) s.append(el("span", "avviso", "Il file non è più qui: rilancia fileme indicizza"));
+    if (r.estratto) s.append(el("p", "estratto", "«" + r.estratto + "»"));
+    if (r.esiste) {
+      const azioni = el("div", "azioni");
+      const apriFile = el("button", "", "Apri");
+      apriFile.addEventListener("click", () => apri(r.percorso, false));
+      const apriCartella = el("button", "", "Mostra nella cartella");
+      apriCartella.addEventListener("click", () => apri(r.percorso, true));
+      azioni.append(apriFile, apriCartella);
+      s.append(azioni);
+    }
+    return s;
+  }
+
+  function mostraCerca(dati) {
+    const n = dati.risultati.length;
+    const contenuto = [el("p", "info", n + (n === 1 ? " file trovato" : " file trovati") + " in " + numero(dati.secondi) + " s")];
+    for (const r of dati.risultati) contenuto.push(schedaRisultato(r));
+    $("risultati").replaceChildren(...contenuto);
+  }
+
+  function mostraSuggerisci(dati) {
+    const contenuto = [];
+    if (dati.situazione) {
+      const parole = dati.parole.map((p) => "«" + p + "»").join(", ");
+      contenuto.push(el("p", "situazione", "Situazione riconosciuta: " + dati.situazione + " (dalle parole " + parole + ")"));
+      for (const d of dati.documenti) {
+        contenuto.push(el("h2", "", d.documento));
+        if (!d.risultato) contenuto.push(el("p", "info", "Nessun file disponibile nell'indice."));
+        else contenuto.push(schedaRisultato(d.risultato, d.incerto ? "INCERTO: forse non hai questo documento" : ""));
+      }
+    } else {
+      contenuto.push(el("p", "situazione", "Nessuna situazione conosciuta in questa frase: ecco una ricerca normale."));
+      for (const r of dati.risultati) contenuto.push(schedaRisultato(r));
+    }
+    contenuto.push(el("p", "info", "Calcolato in " + numero(dati.secondi) + " s"));
+    $("risultati").replaceChildren(...contenuto);
+  }
+
+  async function avvia() {
+    const domanda = $("domanda").value.trim();
+    if (!domanda) return;
+    $("risultati").replaceChildren(el("p", "info", "Cerco…"));
+    try {
+      const dati = await chiedi("/api/" + modo + "?q=" + encodeURIComponent(domanda));
+      if (modo === "cerca") mostraCerca(dati);
+      else mostraSuggerisci(dati);
+    } catch (e) {
+      $("risultati").replaceChildren(el("p", "info errore", e.message));
+    }
+  }
+
+  for (const b of document.querySelectorAll(".scheda")) {
+    b.addEventListener("click", () => impostaModo(b.dataset.modo));
+  }
+  $("modulo").addEventListener("submit", (evento) => { evento.preventDefault(); avvia(); });
+  impostaModo("cerca");
+  chiedi("/api/stato")
+    .then((s) => { $("stato").textContent = s.file + " documenti nell'indice · tutto resta sul tuo computer"; })
+    .catch(() => { $("stato").textContent = "FileMe non risponde: controlla la finestra del terminale."; });
+</script>
+</body>
+</html>
