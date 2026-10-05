@@ -3,6 +3,9 @@
 Il percorso di ogni file è:
     trova_file()  ->  leggi il testo (PDF/DOCX/XLSX/TXT)  ->  pulisci()  ->  dividi_in_chunk()
 
+Ogni chunk viene poi diviso in frasi con dividi_in_frasi(): sono i candidati
+per l'estratto mostrato nei risultati della ricerca.
+
 Tutti i file vengono aperti in SOLA LETTURA (modalità "rb"): non vengono mai
 modificati, spostati o cancellati.
 """
@@ -11,6 +14,7 @@ from __future__ import annotations
 
 import codecs
 import logging
+import math
 import os
 import re
 from dataclasses import dataclass
@@ -198,6 +202,28 @@ def dividi_in_chunk(
     if corrente:
         chunk.append(" ".join(corrente))
     return chunk
+
+
+def dividi_in_frasi(testo: str, min_parole: int = 8, max_parole: int = 30) -> list[str]:
+    """Divide un testo in frasi leggibili come estratto.
+
+    Taglia dopo . ! ? ;  — unisce i pezzi troppo corti (es. "Art. 1 -") al
+    successivo e spezza quelli troppo lunghi (es. righe di tabelle senza punti).
+    """
+    frasi: list[str] = []
+    corrente: list[str] = []
+    for pezzo in re.split(r"(?<=[.!?;])\s+", testo):
+        corrente += pezzo.split()
+        if len(corrente) >= min_parole:
+            # Se è troppo lunga la taglio in parti uguali (es. 35 parole -> 18 + 17,
+            # non 30 + 5), così non restano frammenti minuscoli.
+            parti = math.ceil(len(corrente) / max_parole)
+            lunghezza = math.ceil(len(corrente) / parti)
+            frasi += [" ".join(corrente[i : i + lunghezza]) for i in range(0, len(corrente), lunghezza)]
+            corrente = []
+    if corrente:
+        frasi.append(" ".join(corrente))
+    return frasi
 
 
 # --- Mettiamo tutto insieme ----------------------------------------------------

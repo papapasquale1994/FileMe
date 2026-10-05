@@ -6,18 +6,17 @@ Come funziona:
 3. i chunk vengono raggruppati per file: il punteggio di un file è quello
    del suo chunk migliore;
 4. per ogni file scegliamo, dentro il chunk migliore, la frase più vicina alla
-   domanda: è l'estratto che ti mostriamo.
+   domanda: è l'estratto che ti mostriamo. Le frasi e i loro vettori sono già
+   nell'indice, preparati durante l'indicizzazione: qui basta confrontarli.
 """
 
 from __future__ import annotations
 
-import math
-import re
 from dataclasses import dataclass
 from pathlib import Path
 
 from fileme.embedding import Modello
-from fileme.indice import ChunkTrovato, Indice
+from fileme.indice import ChunkTrovato, Indice, prepara_frasi
 
 
 @dataclass
@@ -32,7 +31,7 @@ def cerca(domanda: str, indice: Indice, modello: Modello, numero: int = 5) -> li
     """I `numero` file più pertinenti per la domanda, dal migliore al peggiore."""
     vettore = modello.codifica_domanda(domanda)
     primi = file_piu_simili(vettore, indice, numero)
-    estratti = frasi_piu_vicine([vettore] * len(primi), [c.testo for c in primi], modello)
+    estratti = frasi_piu_vicine([vettore] * len(primi), primi, indice, modello)
     return [
         Risultato(c.percorso, c.tipo, c.somiglianza, estratto)
         for c, estratto in zip(primi, estratti)
@@ -51,45 +50,26 @@ def file_piu_simili(vettore: list[float], indice: Indice, numero: int) -> list[C
     return list(migliori.values())[:numero]
 
 
-def frasi_piu_vicine(vettori_domanda: list[list[float]], testi: list[str], modello: Modello) -> list[str]:
-    """Per ogni testo, la frase più vicina al vettore della domanda corrispondente.
+def frasi_piu_vicine(
+    vettori_domanda: list[list[float]], chunk: list[ChunkTrovato], indice: Indice, modello: Modello
+) -> list[str]:
+    """Per ogni chunk, la sua frase più vicina al vettore della domanda corrispondente.
 
-    Tutte le frasi passano dal modello in un colpo solo: è molto più veloce
-    che un testo alla volta.
+    Le frasi si leggono già pronte dall'indice. Passano dal modello solo quelle
+    dei chunk indicizzati da una versione precedente di FileMe, che non le
+    hanno ancora (finché non si rilancia `fileme indicizza`).
     """
-    frasi_per_testo = [dividi_in_frasi(testo) for testo in testi]
-    tutte = [frase for frasi in frasi_per_testo for frase in frasi]
-    if not tutte:
-        return [""] * len(testi)
-    vettori = iter(modello.codifica_documenti(tutte))
+    pronte = indice.frasi_dei_chunk([c.id for c in chunk])
+    mancanti = [c for c in chunk if c.id not in pronte]
+    if mancanti:
+        pronte.update(zip([c.id for c in mancanti], prepara_frasi([c.testo for c in mancanti], modello)))
 
     scelte = []
-    for vettore_domanda, frasi in zip(vettori_domanda, frasi_per_testo):
-        punteggi = [somiglianza(vettore_domanda, next(vettori)) for _ in frasi]
-        scelte.append(frasi[punteggi.index(max(punteggi))] if frasi else "")
+    for vettore_domanda, trovato in zip(vettori_domanda, chunk):
+        frasi = pronte[trovato.id]
+        punteggi = [somiglianza(vettore_domanda, vettore) for _, vettore in frasi]
+        scelte.append(frasi[punteggi.index(max(punteggi))][0] if frasi else "")
     return scelte
-
-
-def dividi_in_frasi(testo: str, min_parole: int = 8, max_parole: int = 30) -> list[str]:
-    """Divide un testo in frasi leggibili come estratto.
-
-    Taglia dopo . ! ? ;  — unisce i pezzi troppo corti (es. "Art. 1 -") al
-    successivo e spezza quelli troppo lunghi (es. righe di tabelle senza punti).
-    """
-    frasi: list[str] = []
-    corrente: list[str] = []
-    for pezzo in re.split(r"(?<=[.!?;])\s+", testo):
-        corrente += pezzo.split()
-        if len(corrente) >= min_parole:
-            # Se è troppo lunga la taglio in parti uguali (es. 35 parole -> 18 + 17,
-            # non 30 + 5), così non restano frammenti minuscoli.
-            parti = math.ceil(len(corrente) / max_parole)
-            lunghezza = math.ceil(len(corrente) / parti)
-            frasi += [" ".join(corrente[i : i + lunghezza]) for i in range(0, len(corrente), lunghezza)]
-            corrente = []
-    if corrente:
-        frasi.append(" ".join(corrente))
-    return frasi
 
 
 def somiglianza(a: list[float], b: list[float]) -> float:

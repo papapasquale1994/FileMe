@@ -11,6 +11,7 @@ from conftest import ModelloFinto
 from fileme import config
 from fileme.cli import main
 from fileme.embedding import ModelloEmbedding, ModelloMancante, modello_presente
+from fileme.estrazione import dividi_in_frasi
 from fileme.indice import Indice, indicizza
 
 CARTELLA_ESEMPI = Path(__file__).parent.parent / "esempi" / "documenti"
@@ -64,6 +65,42 @@ def test_prima_indicizzazione(documenti, indice, modello_finto):
     assert "Contratto di affitto dell'appartamento." in contenuto_indice(indice)
 
 
+def frasi_nell_indice(indice: Indice) -> list[str]:
+    return indice._frasi.get(include=["documents"])["documents"]
+
+
+def test_le_frasi_degli_estratti_sono_preparate(tmp_path, indice):
+    cartella = tmp_path / "doc"
+    cartella.mkdir()
+    (cartella / "contratto.txt").write_text(
+        "Il contratto di locazione dura quattro anni a partire da settembre. "
+        "Il canone mensile è di seicento euro da pagare entro il giorno cinque."
+    )
+    modello = ModelloFinto()
+    list(indicizza(cartella, indice, modello))
+
+    frasi = indice.frasi_dei_chunk([indice._raccolta.get()["ids"][0]])
+    (testi_vettori,) = frasi.values()
+    assert [testo for testo, _ in testi_vettori] == [
+        "Il contratto di locazione dura quattro anni a partire da settembre.",
+        "Il canone mensile è di seicento euro da pagare entro il giorno cinque.",
+    ]
+    # Ogni frase ha il suo vettore, calcolato dal modello sulla frase da sola
+    assert testi_vettori[0][1] == pytest.approx(modello.codifica_documenti([testi_vettori[0][0]])[0])
+
+
+def test_documento_lungo_frasi_salvate_a_blocchi(tmp_path, indice):
+    cartella = tmp_path / "doc"
+    cartella.mkdir()
+    (cartella / "lungo.txt").write_text(" ".join(f"Questa è la frase numero {i} del documento." for i in range(60)))
+    indice._max_per_volta = 7  # come un limite di Chroma molto basso
+    list(indicizza(cartella, indice, ModelloFinto()))
+    # Tutte le frasi di tutti i chunk (i chunk si sovrappongono: alcune frasi stanno in due)
+    attese = [f for chunk in contenuto_indice(indice) for f in dividi_in_frasi(chunk)]
+    assert indice.numero_chunk() > 1
+    assert sorted(frasi_nell_indice(indice)) == sorted(attese)
+
+
 # --- Indicizzazioni successive: solo ciò che è cambiato -------------------------------
 
 
@@ -85,6 +122,8 @@ def test_file_modificato_viene_sostituito(documenti, indice):
     assert "Ricetta del tiramisù." in testi
     assert "Ricetta del ragù della nonna." not in testi  # la versione vecchia è sparita
     assert indice.numero_chunk() == 3
+    assert "Ricetta del tiramisù." in frasi_nell_indice(indice)
+    assert "Ricetta del ragù della nonna." not in frasi_nell_indice(indice)
 
 
 def test_file_con_nuova_data_ma_stesso_contenuto(documenti, indice):
@@ -99,12 +138,32 @@ def test_file_con_nuova_data_ma_stesso_contenuto(documenti, indice):
     assert indice.file_indicizzati()[str(ricetta.resolve())].modificato == 1_700_000_000
 
 
+def test_indice_di_una_versione_precedente_viene_completato(documenti, indice):
+    """File indicizzati prima che FileMe preparasse le frasi degli estratti:
+    alla prossima indicizzazione vengono rifatti una volta, poi basta."""
+    list(indicizza(documenti, indice, ModelloFinto()))
+    # Riporto l'indice com'era nella versione precedente: niente frasi e niente segno
+    indice._frasi.delete(where={"percorso": {"$ne": ""}})
+    ids = indice._raccolta.get()["ids"]
+    indice._raccolta.update(ids=ids, metadatas=[{"estratti_pronti": False}] * len(ids))
+
+    esiti = list(indicizza(documenti, indice, ModelloFinto()))
+    assert set(stati(esiti).values()) == {"aggiornato"}
+    assert len(frasi_nell_indice(indice)) == 3
+    assert indice.numero_chunk() == 3
+
+    modello = ModelloFinto()
+    assert set(stati(indicizza(documenti, indice, modello)).values()) == {"invariato"}
+    assert modello.testi_codificati == []
+
+
 def test_file_cancellato_esce_dall_indice(documenti, indice):
     list(indicizza(documenti, indice, ModelloFinto()))
     (documenti / "ricetta.txt").unlink()
     esiti = list(indicizza(documenti, indice, ModelloFinto()))
     assert stati(esiti)["ricetta.txt"] == "rimosso"
     assert indice.numero_chunk() == 2
+    assert "Ricetta del ragù della nonna." not in frasi_nell_indice(indice)  # anche le sue frasi
 
 
 def test_le_altre_cartelle_non_vengono_toccate(tmp_path, documenti, indice):

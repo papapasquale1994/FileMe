@@ -71,6 +71,7 @@ def comando_indicizza(args: argparse.Namespace) -> None:
     print("(il primo file nuovo richiede qualche secondo in più: si carica il modello)\n")
     inizio = time.perf_counter()
     conteggi = dict.fromkeys(["nuovo", "modificato", "invariato", "rimosso", "senza testo", "errore"], 0)
+    conteggi["aggiornato"] = 0  # file indicizzati da una versione precedente: compare solo se ce ne sono
     indice = Indice(config.CARTELLA_INDICE)
     try:
         for esito in indicizza(percorso, indice, ModelloEmbedding()):
@@ -88,7 +89,9 @@ def comando_indicizza(args: argparse.Namespace) -> None:
     secondi = time.perf_counter() - inizio
     print(
         "\nRiepilogo: "
-        + " | ".join(f"{stato}: {numero}" for stato, numero in conteggi.items())
+        + " | ".join(
+            f"{stato}: {numero}" for stato, numero in conteggi.items() if numero or stato != "aggiornato"
+        )
         + f" | tempo: {secondi:.1f} s"
     )
     print(f"Chunk nell'indice: {indice.numero_chunk()} (salvato in {config.CARTELLA_INDICE})")

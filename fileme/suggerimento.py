@@ -58,7 +58,7 @@ def suggerisci(
 
     # Estratti calcolati alla fine, tutti insieme e solo per i file scelti
     trovati = [(vettore, scelto) for _, vettore, scelto in scelte if scelto]
-    estratti = iter(frasi_piu_vicine([v for v, _ in trovati], [c.testo for _, c in trovati], modello))
+    estratti = iter(frasi_piu_vicine([v for v, _ in trovati], [c for _, c in trovati], indice, modello))
     documenti = [
         (documento, Risultato(c.percorso, c.tipo, c.somiglianza, next(estratti)) if c else None)
         for documento, _, c in scelte

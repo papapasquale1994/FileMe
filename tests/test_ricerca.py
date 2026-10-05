@@ -11,7 +11,7 @@ from fileme import config
 from fileme.cli import main
 from fileme.embedding import ModelloEmbedding, modello_presente
 from fileme.indice import Indice, indicizza
-from fileme.ricerca import cerca, dividi_in_frasi
+from fileme.ricerca import cerca
 
 CARTELLA_ESEMPI = Path(__file__).parent.parent / "esempi" / "documenti"
 
@@ -65,6 +65,28 @@ def test_l_estratto_e_la_frase_piu_pertinente(indice_esempi):
     assert primo.estratto == "Servire con tagliatelle fresche all'uovo, mai con gli spaghetti!"
 
 
+def test_gli_estratti_sono_gia_pronti_nell_indice(indice_esempi):
+    """Le frasi degli estratti sono state preparate durante l'indicizzazione:
+    cercare non deve più passare dal modello per calcolarne i vettori."""
+    modello = ModelloFinto()
+    risultati = cerca("tagliatelle fresche", indice_esempi, modello)
+    assert risultati[0].estratto == "Servire con tagliatelle fresche all'uovo, mai con gli spaghetti!"
+    assert modello.testi_codificati == []  # solo la domanda è diventata un vettore
+
+
+def test_indice_di_una_versione_precedente_funziona_ancora(tmp_path):
+    """Un indice senza frasi pronte (creato prima di questa versione):
+    l'estratto si calcola al momento, come si faceva prima."""
+    indice = Indice(tmp_path / "indice")
+    list(indicizza(CARTELLA_ESEMPI, indice, ModelloFinto()))
+    indice._frasi.delete(where={"percorso": {"$ne": ""}})  # come se le frasi non ci fossero mai state
+
+    modello = ModelloFinto()
+    primo = cerca("tagliatelle fresche", indice, modello)[0]
+    assert primo.estratto == "Servire con tagliatelle fresche all'uovo, mai con gli spaghetti!"
+    assert modello.testi_codificati  # le frasi sono passate dal modello
+
+
 def test_il_nome_del_file_aiuta_a_trovarlo(tmp_path):
     cartella = tmp_path / "doc"
     cartella.mkdir()
@@ -83,30 +105,6 @@ def test_indice_vuoto_nessun_risultato(tmp_path):
 def test_nessuna_connessione_di_rete(indice_esempi, rete_bloccata):
     cerca("contratto di affitto", indice_esempi, ModelloFinto())
     assert rete_bloccata == []
-
-
-# --- Divisione in frasi per l'estratto --------------------------------------------------
-
-
-def test_frasi_divise_sulla_punteggiatura():
-    testo = "Prima frase abbastanza lunga da stare da sola. Seconda frase anche lei lunga a sufficienza!"
-    assert dividi_in_frasi(testo) == [
-        "Prima frase abbastanza lunga da stare da sola.",
-        "Seconda frase anche lei lunga a sufficienza!",
-    ]
-
-
-def test_pezzi_corti_uniti_alla_frase_seguente():
-    frasi = dividi_in_frasi("Art. 1 - Durata. Il contratto dura quattro anni dal primo settembre.")
-    assert frasi == ["Art. 1 - Durata. Il contratto dura quattro anni dal primo settembre."]
-
-
-def test_testo_lungo_senza_punti_tagliato_in_parti_simili():
-    testo = " ".join(f"cella{i} |" for i in range(35))  # 70 "parole", come una tabella
-    frasi = dividi_in_frasi(testo)
-    assert len(frasi) == 3
-    assert all(8 <= len(f.split()) <= 30 for f in frasi)
-    assert " ".join(frasi) == testo  # nessuna parola persa
 
 
 # --- Comando da terminale -------------------------------------------------------------

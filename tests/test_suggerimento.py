@@ -28,6 +28,13 @@ def proposti(suggerimento) -> dict[str, str | None]:
     return {doc: (r.percorso.name if r else None) for doc, r in suggerimento.documenti}
 
 
+def test_suggerimento_usa_gli_estratti_gia_pronti(indice_esempi):
+    modello = ModelloFinto()
+    suggerimento = suggerisci("un'azienda mi chiede il curriculum", indice_esempi, modello)
+    assert all(r.estratto for _, r in suggerimento.documenti if r)
+    assert modello.testi_codificati == []  # nessuna frase ricalcolata durante il suggerimento
+
+
 # --- Riconoscere la situazione -------------------------------------------------------
 
 

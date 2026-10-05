@@ -13,8 +13,8 @@ Prototipo (MVP) per computer desktop, scritto in Python.
 - Internet serve solo **una volta**, per scaricare le librerie e il modello. Dopo, funziona offline.
 - I dati di FileMe (indice e modello) stanno in una cartella separata: `.fileme` dentro
   la tua cartella utente.
-- L'**indice** (`.fileme/indice`) contiene i pezzi di testo estratti dai documenti, che servono
-  a mostrarti l'estratto nei risultati. Resta sul tuo computer, ma trattalo come un dato
+- L'**indice** (`.fileme/indice`) contiene i pezzi di testo estratti dai documenti, divisi anche
+  in frasi, che servono a mostrarti l'estratto nei risultati. Resta sul tuo computer, ma trattalo come un dato
   personale. Per cancellarlo basta eliminare quella cartella: i tuoi file non vengono toccati.
 
 ## Stato del progetto
@@ -28,7 +28,7 @@ Prototipo (MVP) per computer desktop, scritto in Python.
 | 5 | Suggerimento contestuale (`fileme suggerisci`) | ✅ fatto |
 | 6 | Valutazione con 20 query di prova (`fileme valuta`) | ✅ fatto |
 | + | Interfaccia web locale (`fileme web`) | ✅ fatto |
-| + | Estratti preparati durante l'indicizzazione (ricerca più veloce) | in arrivo |
+| + | Estratti preparati durante l'indicizzazione (ricerca più veloce) | ✅ fatto |
 
 ---
 
@@ -188,7 +188,9 @@ si leggono bene, quanti sono scansioni e quanti danno errore.
 ## Indicizzare i documenti
 
 Indicizzare vuol dire preparare i documenti per la ricerca: FileMe legge ogni file, lo divide
-in chunk, calcola il vettore (embedding) di ogni chunk e salva tutto nell'indice.
+in chunk, calcola il vettore (embedding) di ogni chunk e salva tutto nell'indice. Prepara anche
+gli **estratti**: divide ogni chunk in frasi e calcola il vettore di ogni frase, così durante la
+ricerca deve solo confrontarle con la tua domanda, senza ricalcolarle ogni volta.
 
 ```
 fileme scarica-modello            (una volta sola, serve internet)
@@ -212,13 +214,23 @@ di modifica e un'"impronta" del contenuto (hash).
 - **rimosso**: il file non c'è più sul disco, quindi esce dall'indice. Il file vero non viene
   mai toccato.
 - **senza testo** / **errore**: come in `fileme estrai`. Questi file non entrano nell'indice.
+- **aggiornato**: il file non è cambiato, ma era stato indicizzato da una versione precedente di
+  FileMe, che non preparava gli estratti. Succede **una volta sola**, la prima volta che rilanci
+  `fileme indicizza` dopo l'aggiornamento: questo giro dura quanto la prima indicizzazione. Nel
+  riepilogo compare solo se ci sono file aggiornati.
+
+> **Hai già un indice?** La ricerca funziona anche senza rifare nulla: per i file non ancora
+> aggiornati FileMe calcola gli estratti al momento, come faceva prima (cioè più lentamente).
+> Per avere la ricerca veloce rilancia `fileme indicizza` sulle tue cartelle.
 
 Puoi indicizzare più cartelle, una alla volta (es. Download, poi Documenti): ogni comando
 aggiorna solo la cartella indicata e lascia stare le altre.
 
-Quanto ci vuole? La prima volta il modello deve calcolare i vettori di tutti i chunk: per un
-centinaio di documenti servono indicativamente alcuni minuti, a seconda del computer. Le volte
-successive bastano pochi secondi, se i file sono cambiati poco.
+Quanto ci vuole? La prima volta il modello deve calcolare i vettori di tutti i chunk e di tutte
+le frasi: per un centinaio di documenti servono indicativamente alcuni minuti, a seconda del
+computer. Preparare gli estratti rende l'indicizzazione un po' più lenta e l'indice un po' più
+grande, in cambio di ricerche più veloci. Le volte successive bastano pochi secondi, se i file
+sono cambiati poco.
 
 ## Cercare i documenti
 
@@ -252,7 +264,8 @@ Tempo: … s per la ricerca | … s in totale, compreso l'avvio di FileMe e del 
 
 La riga `Tempo` mostra due numeri:
 - **per la ricerca**: il lavoro vero (domanda → vettore → confronto → estratti). Di solito è
-  una frazione di secondo.
+  una frazione di secondo: gli estratti sono già pronti nell'indice e il modello calcola soltanto
+  il vettore della tua domanda.
 - **in totale**: comprende anche l'avvio di FileMe e il caricamento del modello in memoria,
   che richiede alcuni secondi ogni volta che lanci il comando.
 
@@ -433,9 +446,9 @@ FileMe/
 ├── fileme/                 il codice del programma
 │   ├── __init__.py         segna la cartella come pacchetto Python; contiene la versione
 │   ├── config.py           impostazioni: cartella dati, modello, formati, privacy
-│   ├── estrazione.py       trova i file, ne legge il testo e lo divide in chunk
+│   ├── estrazione.py       trova i file, ne legge il testo e lo divide in chunk e in frasi
 │   ├── embedding.py        scarica e usa il modello che trasforma i testi in vettori
-│   ├── indice.py           il database (Chroma) e l'indicizzazione dei soli file cambiati
+│   ├── indice.py           il database (Chroma) con chunk e frasi, e l'indicizzazione dei soli file cambiati
 │   ├── ricerca.py          dalla descrizione ai file più pertinenti, con l'estratto
 │   ├── situazioni.py       le situazioni conosciute da "suggerisci" (modificabile)
 │   ├── suggerimento.py     dalla situazione ai documenti che servono

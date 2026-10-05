@@ -14,6 +14,7 @@ from pypdf import PdfWriter
 from fileme.cli import main
 from fileme.estrazione import (
     dividi_in_chunk,
+    dividi_in_frasi,
     estrai_cartella,
     estrai_documento,
     pulisci,
@@ -243,3 +244,27 @@ def test_comando_estrai(tmp_path, capsys):
 def test_comando_estrai_cartella_inesistente(tmp_path):
     with pytest.raises(SystemExit):
         main(["estrai", str(tmp_path / "non_esiste")])
+
+
+# --- Divisione in frasi per l'estratto --------------------------------------------------
+
+
+def test_frasi_divise_sulla_punteggiatura():
+    testo = "Prima frase abbastanza lunga da stare da sola. Seconda frase anche lei lunga a sufficienza!"
+    assert dividi_in_frasi(testo) == [
+        "Prima frase abbastanza lunga da stare da sola.",
+        "Seconda frase anche lei lunga a sufficienza!",
+    ]
+
+
+def test_pezzi_corti_uniti_alla_frase_seguente():
+    frasi = dividi_in_frasi("Art. 1 - Durata. Il contratto dura quattro anni dal primo settembre.")
+    assert frasi == ["Art. 1 - Durata. Il contratto dura quattro anni dal primo settembre."]
+
+
+def test_testo_lungo_senza_punti_tagliato_in_parti_simili():
+    testo = " ".join(f"cella{i} |" for i in range(35))  # 70 "parole", come una tabella
+    frasi = dividi_in_frasi(testo)
+    assert len(frasi) == 3
+    assert all(8 <= len(f.split()) <= 30 for f in frasi)
+    assert " ".join(frasi) == testo  # nessuna parola persa
