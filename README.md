@@ -27,6 +27,8 @@ Prototipo (MVP) per computer desktop, scritto in Python.
 | 4 | Ricerca (`fileme cerca`) | ✅ fatto |
 | 5 | Suggerimento contestuale (`fileme suggerisci`) | ✅ fatto |
 | 6 | Valutazione con 20 query di prova (`fileme valuta`) | ✅ fatto |
+| + | Interfaccia web locale (`fileme web`) | ✅ fatto |
+| + | Estratti preparati durante l'indicizzazione (ricerca più veloce) | in arrivo |
 
 ---
 
@@ -147,6 +149,7 @@ nei primi 3 risultati in almeno 14 query su 20, in meno di 3 secondi e senza int
 | `fileme suggerisci` | mostra le situazioni conosciute, con parole chiave e documenti |
 | `fileme valuta <file.csv>` | misura quante volte la ricerca trova il file giusto nei primi 3 (usa l'indice principale) |
 | `fileme valuta <file.csv> --cartella <cartella>` | come sopra, ma su un indice temporaneo con solo quella cartella |
+| `fileme web` | apre FileMe **nel browser**: cerchi da una pagina, con il modello sempre caricato |
 
 Al posto della cartella puoi indicare anche un singolo file.
 
@@ -264,6 +267,30 @@ Cosa cerchi? bolletta del gas
 ...
 Cosa cerchi?          (Invio su riga vuota per uscire)
 ```
+
+## Interfaccia web (il modo più comodo)
+
+```
+fileme web
+```
+
+FileMe carica indice e modello **una volta sola** (qualche decina di secondi), poi apre da solo
+il browser su `http://127.0.0.1:8765`. Da lì:
+- **Cerca un documento**: scrivi cosa cerchi e premi Invio;
+- **Cosa mi serve per…**: descrivi una situazione (es. "un'azienda mi chiede il curriculum");
+- su ogni risultato, **Apri** apre il file con il suo programma e **Mostra nella cartella** apre
+  la cartella che lo contiene.
+
+Lascia aperta la finestra del terminale finché usi la pagina; per spegnere FileMe premi **Ctrl+C**
+lì. Se la porta 8765 è occupata: `fileme web --porta 8766`.
+
+Sicurezza e privacy:
+- il server risponde **solo a questo computer** (indirizzo `127.0.0.1`): nessun altro dispositivo
+  della rete può collegarsi;
+- la pagina **non scarica nulla da internet** (niente font o script esterni);
+- "Apri" funziona **solo sui file dell'indice**: un sito esterno non può usarlo per aprire altro.
+
+Per aggiungere documenti si usa ancora `fileme indicizza <cartella>`; poi ricarica la pagina.
 
 ## Suggerimento contestuale
 
@@ -413,6 +440,8 @@ FileMe/
 │   ├── situazioni.py       le situazioni conosciute da "suggerisci" (modificabile)
 │   ├── suggerimento.py     dalla situazione ai documenti che servono
 │   ├── valutazione.py      misura quante volte la ricerca trova il file giusto
+│   ├── web.py              il server dell'interfaccia web locale (fileme web)
+│   ├── pagina.html         la pagina che vedi nel browser
 │   └── cli.py              i comandi da terminale (fileme info, fileme estrai, ...)
 ├── tests/                  test automatici (si lanciano con: pytest)
 │   ├── conftest.py         strumenti per i test: un modello "finto" e il blocco della rete
@@ -421,7 +450,8 @@ FileMe/
 │   ├── test_indice.py
 │   ├── test_ricerca.py
 │   ├── test_suggerimento.py
-│   └── test_valutazione.py
+│   ├── test_valutazione.py
+│   └── test_web.py
 ├── valutazione/
 │   ├── query_esempi.csv    20 query di prova (+4 documenti inesistenti) sugli esempi
 │   └── modello_query_personali.csv  modello da compilare per i tuoi documenti

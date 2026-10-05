@@ -2,7 +2,7 @@
 
 Dopo l'installazione si usano così:  fileme <comando> [opzioni]
 I comandi arrivano una fase alla volta: per ora `info`, `estrai`,
-`scarica-modello`, `indicizza`, `cerca`, `suggerisci` e `valuta`.
+`scarica-modello`, `indicizza`, `cerca`, `suggerisci`, `valuta` e `web`.
 """
 
 import argparse
@@ -29,7 +29,7 @@ from fileme.indice import Indice, indicizza  # noqa: E402
 from fileme.ricerca import Risultato, cerca  # noqa: E402
 from fileme.situazioni import SITUAZIONI  # noqa: E402
 from fileme.suggerimento import suggerisci  # noqa: E402
-from fileme import valutazione  # noqa: E402
+from fileme import valutazione, web  # noqa: E402
 
 
 def comando_info(args: argparse.Namespace) -> None:
@@ -301,6 +301,19 @@ def _stampa_valutazione(file_query: Path, esiti, mancanti, avvio: float) -> None
             print(f"  -> soglia consigliata: {soglia:.2f} (si cambia in fileme/config.py)")
 
 
+def comando_web(args: argparse.Namespace) -> None:
+    """Accende l'interfaccia web locale: si cerca da una pagina del browser."""
+    print("Avvio FileMe: carico l'indice e il modello (può volerci qualche decina di secondi)...")
+    indice, modello = _prepara_ricerca()
+    try:
+        web.avvia(web.App(indice, modello), args.porta, apri_browser=not args.senza_browser)
+    except OSError:
+        sys.exit(
+            f"Errore: la porta {args.porta} è già usata da un altro programma "
+            f"(forse FileMe è già acceso?). Prova con:  fileme web --porta {args.porta + 1}"
+        )
+
+
 def comando_estrai(args: argparse.Namespace) -> None:
     """Legge i file di una cartella e mostra cosa ne ricava, senza salvare nulla."""
     percorso = Path(args.cartella).expanduser()
@@ -415,6 +428,20 @@ def crea_parser() -> argparse.ArgumentParser:
         help="valuta su un indice temporaneo con solo questa cartella (es. esempi/documenti)",
     )
     valuta.set_defaults(funzione=comando_valuta)
+
+    interfaccia = sottocomandi.add_parser(
+        "web",
+        help="apre FileMe nel browser: cerca da una pagina, con il modello sempre caricato",
+    )
+    interfaccia.add_argument(
+        "--porta", type=int, default=8765,
+        help="porta del server locale (default: 8765)",
+    )
+    interfaccia.add_argument(
+        "--senza-browser", action="store_true",
+        help="non aprire il browser da solo",
+    )
+    interfaccia.set_defaults(funzione=comando_web)
 
     return parser
 

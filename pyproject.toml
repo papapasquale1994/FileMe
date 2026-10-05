@@ -35,5 +35,8 @@ version = { attr = "fileme.__version__" }
 [tool.setuptools.packages.find]
 include = ["fileme*"]
 
+[tool.setuptools.package-data]
+fileme = ["pagina.html"]  # la pagina dell'interfaccia web
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
